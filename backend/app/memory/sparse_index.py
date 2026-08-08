@@ -40,7 +40,11 @@ class BM25Index:
         corpus = [tokenize_text(f"{d.get('topic_title', '')} {d.get('text', '')}") for d in post_docs]
         if corpus and any(len(c) > 0 for c in corpus):
             self.bm25 = BM25Okapi(corpus)
-            # Floor non-positive IDFs (which occur when corpus_size <= 2) so lexical matches yield positive scores
+            # On a tiny corpus every term is in (almost) every document, so BM25Okapi's
+            # IDF collapses to exactly 0 and query_sparse would return nothing at all.
+            # Flooring keeps ranking usable. It does flatten the rare/common
+            # distinction, which is why duplicate detection uses its own IDF
+            # (hybrid_retriever._idf_weights) rather than these scores.
             for word, idf in self.bm25.idf.items():
                 if idf <= 0:
                     self.bm25.idf[word] = 0.25

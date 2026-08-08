@@ -15,6 +15,9 @@ An autonomous publishing agent that digests AI research publications (from Hacke
 - `.env.example`: Configuration template for API keys and DB paths.
 - `Dockerfile`: Production deployment Docker image specification.
 - `walkthrough.md`: Complete Phase 4 setup, API-key, scheduling, restart, and verification guide.
+- [`AI_USAGE_LOG.md`](AI_USAGE_LOG.md): Record of AI-assisted development across all phases.
+- [`persona-distill.md`](persona-distill.md): Persona design — identity, voice, editorial standards, and memory behaviour.
+- [`FIXES.md`](FIXES.md): Prioritised defect and advancement plan.
 
 ---
 

@@ -108,3 +108,10 @@ class MemoryRepository:
         return db.query(PostModel).filter(
             PostModel.agent_id == agent_id
         ).order_by(PostModel.created_at.desc()).limit(limit).all()
+
+    @staticmethod
+    def get_rejected_topics(db: Session, agent_id: str, limit: int = 5) -> List[RejectedTopicModel]:
+        """Fetch the N most recent rejected topics for an agent, newest first."""
+        return db.query(RejectedTopicModel).filter(
+            RejectedTopicModel.agent_id == agent_id
+        ).order_by(RejectedTopicModel.created_at.desc()).limit(limit).all()

@@ -5,6 +5,15 @@ import logging
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Windows consoles default to cp1252, which cannot encode the typographic
+# characters (em dashes, curly quotes, narrow no-break spaces) that appear in
+# generated posts. Without this, printing a post raises UnicodeEncodeError.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except (AttributeError, OSError):
+    pass
+
+
 from backend.app.memory.db import init_db, SessionLocal
 from backend.app.memory.models import AgentModel
 from backend.app.agent.persona.presets import DISTILL_PRESET

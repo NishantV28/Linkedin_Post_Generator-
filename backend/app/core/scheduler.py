@@ -63,10 +63,14 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
         seen_count = len(raw_candidates)
         logger.info(f"Discovered {seen_count} raw candidates.")
 
-        # 2. Hybrid Deduplication
+        # 2. Hybrid Deduplication. The batch doubles as extra IDF corpus, so
+        # terms common across this cycle's candidates count as generic.
         surviving_candidates = []
+        batch_texts = [f"{c.title} {c.summary}" for c in raw_candidates]
         for cand in raw_candidates:
-            is_dup, reason, _ = HybridRetriever.is_duplicate(cand, agent_id=agent.id, db=db)
+            is_dup, reason, _ = HybridRetriever.is_duplicate(
+                cand, agent_id=agent.id, db=db, corpus_texts=batch_texts
+            )
             if not is_dup:
                 surviving_candidates.append(cand)
             else:
@@ -94,7 +98,11 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
                 "cycle_outcome": "init"
             }
 
-            final_state = agent_graph.invoke(initial_state)
+            # Each candidate costs at most ~6 steps (judge, writer, qa, revisions,
+            # rejection log, advance); allow headroom so a long candidate list is
+            # not mistaken for a runaway loop.
+            recursion_limit = max(50, 8 * len(surviving_candidates))
+            final_state = agent_graph.invoke(initial_state, {"recursion_limit": recursion_limit})
             outcome = final_state.get("cycle_outcome", "completed")
 
         # 4. Update Agent Metrics

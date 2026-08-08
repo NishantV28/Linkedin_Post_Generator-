@@ -11,6 +11,9 @@ from backend.app.agent.nodes.rejection_logger import log_candidate_rejection
 
 logger = logging.getLogger("autonomous_agent.agent.graph")
 
+# Maximum writer revisions per candidate before the topic is abandoned.
+MAX_REVISIONS = 2
+
 def start_cycle(state: AgentState) -> AgentState:
     """Initialize cycle state parameters."""
     state["candidate_idx"] = 0
@@ -29,6 +32,20 @@ def start_cycle(state: AgentState) -> AgentState:
         logger.info("Cycle started with 0 candidates.")
 
     return state
+
+def log_rejection(state: AgentState) -> AgentState:
+    """
+    Persist the current candidate's rejection.
+
+    This is a node, not a router side effect, so its `rejected_count` increment
+    actually survives into the next step of the graph.
+    """
+    qa = state.get("qa_verdict")
+    if qa and qa.verdict.lower() != "pass":
+        prefix = "[QA Judge Rejected after revision limit]"
+    else:
+        prefix = "[Editorial Judge Rejected]"
+    return log_candidate_rejection(state, reason_prefix=prefix)
 
 def advance_candidate(state: AgentState) -> AgentState:
     """Advance candidate pointer to the next topic candidate."""
@@ -56,30 +73,27 @@ def route_after_start(state: AgentState) -> Literal["editorial_judge", "__end__"
         return END
     return "editorial_judge"
 
-def route_after_judge(state: AgentState) -> Literal["writer", "advance_candidate"]:
+def route_after_judge(state: AgentState) -> Literal["writer", "log_rejection"]:
     verdict = state.get("judge_verdict")
     if verdict and verdict.decision.lower() == "pass":
         return "writer"
-    
-    # Log candidate rejection before advancing
-    log_candidate_rejection(state, reason_prefix="[Editorial Judge Rejected]")
-    return "advance_candidate"
+    return "log_rejection"
 
-def route_after_qa(state: AgentState) -> Literal["publish", "writer", "advance_candidate"]:
+def route_after_qa(state: AgentState) -> Literal["publish", "writer", "log_rejection"]:
     qa = state.get("qa_verdict")
     retry_count = state.get("retry_count", 0)
 
     if qa and qa.verdict.lower() == "pass":
         return "publish"
 
-    if qa and qa.verdict.lower() == "revise" and retry_count < 2:
-        state["retry_count"] = retry_count + 1
-        logger.info(f"QA requested revision. Retrying writer node (Attempt {state['retry_count']}/2)")
+    # `retry_count` is incremented by writer_node, so it reflects revisions
+    # already performed; allow up to MAX_REVISIONS of them.
+    if qa and qa.verdict.lower() == "revise" and retry_count < MAX_REVISIONS:
+        logger.info(f"QA requested revision. Retrying writer node (Attempt {retry_count + 1}/{MAX_REVISIONS})")
         return "writer"
 
     # QA failed after retries
-    log_candidate_rejection(state, reason_prefix="[QA Judge Rejected after revision limit]")
-    return "advance_candidate"
+    return "log_rejection"
 
 def route_after_advance(state: AgentState) -> Literal["editorial_judge", "__end__"]:
     if state.get("current_candidate"):
@@ -96,6 +110,7 @@ def build_agent_graph():
     workflow.add_node("writer", writer_node)
     workflow.add_node("qa_judge", qa_judge_node)
     workflow.add_node("publish", publish_node)
+    workflow.add_node("log_rejection", log_rejection)
     workflow.add_node("advance_candidate", advance_candidate)
 
     # Set Entry Point
@@ -106,6 +121,7 @@ def build_agent_graph():
     workflow.add_conditional_edges("editorial_judge", route_after_judge)
     workflow.add_edge("writer", "qa_judge")
     workflow.add_conditional_edges("qa_judge", route_after_qa)
+    workflow.add_edge("log_rejection", "advance_candidate")
     workflow.add_edge("publish", END)
     workflow.add_conditional_edges("advance_candidate", route_after_advance)
 

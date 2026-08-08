@@ -5,6 +5,15 @@ import logging
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Windows consoles default to cp1252, which cannot encode the typographic
+# characters (em dashes, curly quotes, narrow no-break spaces) that appear in
+# generated posts. Without this, printing a post raises UnicodeEncodeError.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except (AttributeError, OSError):
+    pass
+
+
 from backend.app.memory.db import init_db, SessionLocal
 from backend.app.memory.models import AgentModel
 from backend.app.agent.persona.presets import DISTILL_PRESET
@@ -68,22 +77,24 @@ def run_discovery_test():
         surviving_candidates = []
         dropped_count = 0
 
+        batch_texts = [f"{c.title} {c.summary}" for c in raw_candidates]
+
         for cand in raw_candidates:
             is_dup, reason, scores = HybridRetriever.is_duplicate(
                 candidate=cand,
                 agent_id=agent.id,
                 db=db,
-                dense_distance_threshold=0.35
+                corpus_texts=batch_texts
             )
 
             dense_dist_str = f"{scores['dense_distance']:.4f}" if scores.get("dense_distance") is not None else "N/A"
-            rrf_score_str = f"{scores['rrf_score']:.4f}"
+            lexical_str = f"{scores.get('lexical_overlap', 0.0):.4f}"
 
             if is_dup:
                 dropped_count += 1
                 print(f"  [DROPPED - DUP] Source: {cand.source.upper()} | Title: '{cand.title[:45]}...'")
                 print(f"                  Reason: {reason}")
-                print(f"                  Dense Distance: {dense_dist_str} | RRF Score: {rrf_score_str}")
+                print(f"                  Dense Distance: {dense_dist_str} | Lexical Overlap: {lexical_str}")
                 MemoryRepository.save_rejection(
                     db=db,
                     agent_id=agent.id,
@@ -95,7 +106,7 @@ def run_discovery_test():
             else:
                 surviving_candidates.append(cand)
                 print(f"  [ACCEPTED - NOVEL] Source: {cand.source.upper()} | Title: '{cand.title[:45]}...'")
-                print(f"                     Dense Distance: {dense_dist_str} | RRF Score: {rrf_score_str}")
+                print(f"                     Dense Distance: {dense_dist_str} | Lexical Overlap: {lexical_str}")
 
         # 5. Summary metrics
         print("\n" + "=" * 70)

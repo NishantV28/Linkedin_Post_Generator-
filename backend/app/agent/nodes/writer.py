@@ -25,6 +25,12 @@ def writer_node(state: AgentState) -> AgentState:
         logger.warning("No candidate provided to writer_node.")
         return state
 
+    # Count the revision here rather than in the router: LangGraph rebuilds state
+    # for conditional-edge functions, so mutations made there are never persisted.
+    if qa_verdict and qa_verdict.verdict.lower() == "revise":
+        retry_count += 1
+        state["retry_count"] = retry_count
+
     try:
         # Retrieve topically relevant past posts for few-shot style anchoring
         few_shot_context = "No previous posts in memory (first post for persona)."
@@ -52,7 +58,7 @@ def writer_node(state: AgentState) -> AgentState:
         judge_reasoning = judge_verdict.reasoning if judge_verdict else "Approved candidate."
 
         revision_section = ""
-        if qa_verdict and qa_verdict.verdict == "revise":
+        if qa_verdict and qa_verdict.verdict.lower() == "revise":
             revision_section = f"REVISION REQUEST (Attempt #{retry_count}):\nPrevious QA Feedback: {qa_verdict.feedback}\nPlease fix the issues above in this new draft."
 
         system_msg = WRITER_SYSTEM_PROMPT.format(
