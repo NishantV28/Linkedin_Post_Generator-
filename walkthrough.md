@@ -1,6 +1,6 @@
 # System Walkthrough & Verification Guide
 
-This document provides a complete, step-by-step guide to configure, run, and manually verify **Phase 1 (Foundations & Contracts)** and **Phase 2 (Discovery & Memory Layer)** of the Autonomous AI Persona Agent project.
+This document provides a complete, step-by-step guide to configure, run, and manually verify **Phase 1 (Foundations & Contracts)**, **Phase 2 (Discovery & Memory Layer)**, and **Phase 3 (LangGraph Agentic Core — Editorial Judgment & Voice)** of the Autonomous AI Persona Agent project.
 
 ---
 
@@ -14,224 +14,154 @@ cp .env.example .env
 
 ### Environment Variables Breakdown
 
-| Variable | Required for Phase 1 & 2? | Description | Example / Default |
-| :--- | :---: | :--- | :--- |
-| `DATABASE_URL` | **YES** | SQLite connection string for persistent relational storage | `sqlite:///./post_generator.db` |
-| `ENVIRONMENT` | **YES** | Execution environment mode | `development` |
-| `LOG_LEVEL` | **YES** | Logging severity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` |
-| `HOST` | **YES** | Host IP binding address for uvicorn server | `0.0.0.0` |
-| `PORT` | **YES** | HTTP port for the FastAPI server | `8000` |
-| `CADENCE_MIN_HOURS` | **YES** | Minimum autonomous posting interval (in hours) | `2.0` |
-| `CADENCE_MAX_HOURS` | **YES** | Maximum autonomous posting interval (in hours) | `5.0` |
-| `TAVILY_API_KEY` | ⚠️ **OPTIONAL** | API key for Tavily live web search tool. If omitted, discovery automatically falls back to DuckDuckGo search without failing | `your_tavily_api_key_here` |
-| `OPENAI_API_KEY` | ⚠️ **OPTIONAL (Phase 1 & 2)**<br>🔴 **REQUIRED (Phase 3+)** | OpenAI API Key required for Phase 3 LLM Editorial Judge and Post Writer nodes. Not needed to test Phase 1 APIs or Phase 2 discovery & hybrid memory | `your_openai_api_key_here` |
+| Variable | Required for Phase 1 & 2? | Required for Phase 3? | Description | Example / Default |
+| :--- | :---: | :---: | :--- | :--- |
+| `GROQ_API_KEY` | ⚠️ OPTIONAL | ⚡ **RECOMMENDED** | Groq API key (`gsk_...`) for ultra-fast LLM inference (`llama-3.3-70b-versatile`) | `gsk_your_groq_key_here` |
+| `OPENAI_API_KEY` | ⚠️ OPTIONAL | 🔴 **REQUIRED (if no Groq key)** | OpenAI API key (`sk-...`) for GPT model execution (`gpt-4o-mini`) | `sk-your_openai_key_here` |
+| `LLM_MODEL` | ⚠️ OPTIONAL | ⚠️ OPTIONAL | LLM Model name override (defaults to `llama-3.3-70b-versatile` for Groq, `gpt-4o-mini` for OpenAI) | `llama-3.3-70b-versatile` |
+| `TAVILY_API_KEY` | ⚠️ OPTIONAL | ⚠️ OPTIONAL | Tavily live web search key. Automatically falls back to DuckDuckGo if missing | `your_tavily_api_key_here` |
+| `DATABASE_URL` | **YES** | **YES** | SQLite database file connection string | `sqlite:///./post_generator.db` |
+| `ENVIRONMENT` | **YES** | **YES** | Mode (`development` / `production`) | `development` |
+| `LOG_LEVEL` | **YES** | **YES** | Logging severity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` |
+| `HOST` | **YES** | **YES** | Host IP binding for FastAPI uvicorn server | `0.0.0.0` |
+| `PORT` | **YES** | **YES** | HTTP server port | `8000` |
 
 ---
 
-## 2. Phase 1 & Phase 2 Implementation Verification Summary
+## 2. Phase 1, Phase 2 & Phase 3 Architecture Summary
 
-Both **Phase 1** and **Phase 2** are fully built and verified according to the master plan ([implementation.md](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/implementation.md)):
+All three phases are fully built and verified according to the master plan ([implementation.md](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/implementation.md)):
 
 ### Phase 1 — Foundations & Contracts Status: **COMPLETE**
-- **Scaffolding & Models**: FastAPI app ([backend/app/main.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/main.py)), Pydantic configuration ([backend/app/core/config.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/core/config.py)), and SQLAlchemy models ([backend/app/memory/models.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/memory/models.py)) for `agents`, `posts`, `rejected_topics`, and `cycle_runs`.
-- **Persona Data Model**: Persona schemas ([backend/app/agent/persona/schema.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/schema.py)) and preset profiles for "Distill" and "Ada" ([backend/app/agent/persona/presets.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/presets.py)).
-- **API Contracts & Routes**: Evaluator-facing endpoints implemented in [backend/app/api/routes.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/api/routes.py):
-  - `POST /api/agent/init` (idempotent persona initialization)
-  - `GET /api/agent/feed?agentId=` (pure read-only feed, reverse-chronological, ISO 8601 timestamps)
-  - `GET /api/agent/status` (agent operational status audit)
-  - `GET /api/agent/rejected` (editorial rejection log audit)
-  - `GET /health` (service health check)
+- **Scaffolding & Models**: FastAPI app ([backend/app/main.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/main.py)), Pydantic settings ([backend/app/core/config.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/core/config.py)), SQLAlchemy models ([backend/app/memory/models.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/memory/models.py)).
+- **Persona Schemas & Presets**: Data models in [backend/app/agent/persona/schema.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/schema.py) and presets for "Distill" and "Ada" in [backend/app/agent/persona/presets.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/presets.py).
+- **REST Endpoints**: Evaluator-facing routes in [backend/app/api/routes.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/api/routes.py) (`/init`, `/feed`, `/status`, `/rejected`, `/health`).
 
 ### Phase 2 — Discovery & Memory Layer Status: **COMPLETE**
-- **Multi-Source Discovery Tools**: Integrated scrapers in [backend/app/agent/tools/](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/tools/):
-  - `hn.py`: Hacker News Algolia REST API scraper
-  - `arxiv.py`: arXiv Atom XML API feed parser
-  - `github_trending.py`: GitHub Search REST API monitor
-  - `web_search.py`: Tavily search wrapper with DuckDuckGo fallback
-  - `discovery.py`: Aggregator across all candidate discovery sources
-- **Memory Engine**:
-  - `embeddings.py`: SentenceTransformers (`all-MiniLM-L6-v2`, 384 dimensions)
-  - `vector_store.py`: ChromaDB persistent vector database (`./chroma_data`)
-  - `sparse_index.py`: BM25Okapi lexical index wrapper
-  - `hybrid_retriever.py`: Hybrid dense + sparse retrieval with Reciprocal Rank Fusion ($k=60$) and deduplication engine
-  - `repository.py`: Atomic persistence manager for synchronized SQLite and ChromaDB operations
+- **Candidate Discovery**: Hacker News, arXiv XML, GitHub Trending, and Web Search integrated in [backend/app/agent/tools/](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/tools/).
+- **Hybrid Memory & Deduplication**: Local HuggingFace embeddings (`all-MiniLM-L6-v2`), ChromaDB persistent vector database (`./chroma_data`), BM25 lexical index with stopword filtering (`sparse_index.py`), and RRF rank fusion deduplication engine (`hybrid_retriever.py`).
+
+### Phase 3 — LangGraph Agentic Core Status: **COMPLETE**
+- **LLM Factory**: Multi-provider client in [backend/app/agent/llm.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/llm.py) supporting **Groq API** (`GROQ_API_KEY`) and **OpenAI API** (`OPENAI_API_KEY`).
+- **Graph State & Nodes**:
+  - `editorial_judge.py`: Evaluates topics against relevance, novelty, credibility, and timeliness thresholds.
+  - `writer.py`: Generates persona-voiced posts using few-shot past post style context retrieved via `HybridRetriever`.
+  - `qa_judge.py`: Verifies post tone, checks forbidden phrases, and validates factual grounding against candidate summaries.
+  - `publish.py`: Persists accepted posts into SQLite relational memory and ChromaDB vector memory.
+  - `rejection_logger.py`: Logs full audit scoring breakdowns for rejected topics into `rejected_topics` table.
+- **Graph Compilation**: LangGraph state graph in [backend/app/agent/graph.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/graph.py) with dynamic conditional routing.
 
 ---
 
 ## 3. Step-by-Step Manual Execution & Verification Guide
 
-Follow these steps from scratch to manually test every component.
+Follow these steps from scratch to manually test every phase.
 
 ---
 
-### Step 1: Run the Standalone Discovery & Deduplication Test Harness
+### Step 1: Configure Your API Key in `.env`
 
-This script tests Phase 2 candidate discovery across Hacker News, arXiv, GitHub, and Web search, initializes embeddings, and passes candidates through the Hybrid Dense+BM25 deduplication engine.
+Add your Groq API key or OpenAI API key to `.env`:
 
-#### Command
+```env
+# Add Groq API Key (Recommended)
+GROQ_API_KEY=gsk_your_groq_api_key_here
+
+# OR Add OpenAI API Key
+# OPENAI_API_KEY=sk-your_openai_api_key_here
+```
+
+---
+
+### Step 2: Run Phase 3 LangGraph Cycle Test Harness (Live LLM Generation)
+
+Execute the Phase 3 test harness to discover live candidates, run deduplication, pass candidates through the Editorial Judge LLM, generate drafts with the Post Writer LLM, verify with the QA Judge LLM, and persist published posts:
+
 ```bash
-python scripts/test_discovery.py
+python scripts/test_cycle.py
 ```
 
 #### Expected Output
 ```text
-======================================================================
-      AUTONOMOUS AI PERSONA AGENT — PHASE 2 DISCOVERY & DEDUP HARNESS
-======================================================================
+===========================================================================
+       AUTONOMOUS AI PERSONA AGENT — PHASE 3 LANGGRAPH CORE HARNESS
+===========================================================================
+Using Provider: Groq API | Model: llama-3.3-70b-versatile
 Loaded existing agent 'Distill' (ID: 3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2)
 
-[Seeding memory with initial sample post for dedup testing...]
-
-1. RUNNING CANDIDATE DISCOVERY FOR PERSONA 'Distill'...
-
+1. DISCOVERING LIVE CANDIDATES FOR PERSONA 'Distill'...
 ---> Total Raw Candidates Discovered: 15
-  [1] [HN] Another paper claims better reasoning. But the interesting part... (https://news.ycombinator.com/item?id=...)
-  [2] [ARXIV] Scalable MatMul-free Language Modeling (cs.CL)... (https://arxiv.org/abs/2406.02528)
-  [3] [GITHUB] GitHub: xai-org/grok-1 (48000 stars)... (https://github.com/xai-org/grok-1)
-  [4] [WEB] New RLHF alignment strategies for reasoning agents... (https://...)
 
-2. RUNNING HYBRID DENSE + BM25 DEDUPLICATION EVALUATION...
-  [ACCEPTED - NOVEL] Source: ARXIV | Title: 'Scalable MatMul-free Language Modeling...'
-                     Dense Distance: 0.7241 | RRF Score: 0.0164
-  [DROPPED - DUP] Source: HN | Title: 'Self-Critique Reasoning Models...'
-                  Reason: Semantic duplicate detected (dense distance 0.2104 <= 0.35)
-                  Dense Distance: 0.2104 | RRF Score: 0.0328
+2. DEDUPLICATING CANDIDATES AGAINST PAST MEMORY...
+---> Novel Candidates Ready for Editorial Evaluation: 14
 
-======================================================================
-                        DISCOVERY & DEDUP SUMMARY
-======================================================================
-  Raw Candidates Discovered : 15
-  Duplicates Dropped        : 1
-  Surviving Novel Candidates: 14
-======================================================================
+3. EXECUTING LANGGRAPH AGENT CORE (EDITORIAL JUDGE -> WRITER -> QA JUDGE -> PUBLISH)...
+2026-08-08 12:45:00 - INFO - Starting cycle with 14 candidate(s). Target [0]: 'Scalable MatMul-free Language Modeling...'
+2026-08-08 12:45:02 - INFO - Editorial Judge Verdict for 'Scalable MatMul-free Language Modeling...': PASS (Rel=9, Nov=9, Cred=9)
+2026-08-08 12:45:05 - INFO - Writer node generated draft for 'Scalable MatMul-free Language Modeling...' (420 chars)
+2026-08-08 12:45:06 - INFO - QA Judge Verdict: PASS (Voice=True, Grounded=True, NonRep=True)
+2026-08-08 12:45:07 - INFO - SUCCESS: Published post 'post_a1b2c3d4' for agent '3a8c2f1e' to SQLite + ChromaDB.
+
+===========================================================================
+                          CYCLE EXECUTION SUMMARY
+===========================================================================
+  Cycle Outcome          : PUBLISHED
+  Candidates Processed   : 1
+  Topics Rejected        : 0
+
+---------------------------------------------------------------------------
+                       PUBLISHED POST IN FEED
+---------------------------------------------------------------------------
+POST ID    : post_a1b2c3d4
+TITLE      : Scalable MatMul-free Language Modeling
+CREATED AT : 2026-08-08 12:45:07
+SOURCES    : ['https://arxiv.org/abs/2406.02528']
+
+POST TEXT  :
+Matrix multiplication has dominated neural network architectures for decades.
+But a new paper proves we can train billion-parameter language models completely
+MatMul-free without sacrificing performance...
+
+PUBLISHING RATIONALE :
+Selection Rationale: Selected because removing MatMul hardware constraints is a major architectural breakthrough for efficient inference.
+Why Now: Timely research published on arXiv today.
+---------------------------------------------------------------------------
 ```
 
 ---
 
-### Step 2: Start the FastAPI Backend Server
+### Step 3: Verify the Live Feed API
 
-Launch the FastAPI web server to serve the API endpoints and auto-initialize the SQLite database.
+Start the FastAPI backend server:
 
-#### Command
 ```bash
 python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### Expected Startup Console Output
-```text
-INFO:     Started server process [12345]
-INFO:     Waiting for application startup.
-INFO:     autonomous_agent - Initializing SQLite database tables...
-INFO:     autonomous_agent - Database initialization complete.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-```
+In a separate terminal, fetch the published post feed for your agent:
 
----
-
-### Step 3: Verify All REST API Endpoints
-
-While the uvicorn server is running, execute the following commands in a separate terminal (PowerShell or bash/curl) to verify Phase 1 API contracts.
-
-#### 3.1 Health Check (`GET /health`)
-
-##### PowerShell:
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -Method Get
-```
-##### bash / cURL:
-```bash
-curl -X GET "http://127.0.0.1:8000/health"
-```
-
-##### Expected JSON Response:
-```json
-{
-  "status": "ok",
-  "environment": "development"
-}
-```
-
----
-
-#### 3.2 Initialize Persona Agent (`POST /api/agent/init`)
-
-##### PowerShell:
-```powershell
-$body = @{
-    persona = @{
-        name = "Distill"
-        domain = "AI Research"
-    }
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/agent/init" -Method Post -ContentType "application/json" -Body $body
-```
-
-##### bash / cURL:
-```bash
-curl -X POST "http://127.0.0.1:8000/api/agent/init" \
-     -H "Content-Type: application/json" \
-     -d '{"persona": {"name": "Distill", "domain": "AI Research"}}'
-```
-
-##### Expected JSON Response (Status 201 Created):
-```json
-{
-  "agentId": "3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2"
-}
-```
-
-*Note: Calling `/init` again with the same name & domain returns the same `agentId` (Idempotent).*
-
----
-
-#### 3.3 Query Feed Endpoints (`GET /api/agent/feed?agentId=...`)
-
-##### PowerShell:
+#### PowerShell:
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/agent/feed?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2" -Method Get
 ```
 
-##### bash / cURL:
+#### bash / cURL:
 ```bash
 curl -X GET "http://127.0.0.1:8000/api/agent/feed?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2"
 ```
 
-##### Expected JSON Response:
+#### Expected JSON Output:
 ```json
 {
-  "posts": []
-}
-```
-*(If posts were seeded or published, items are returned in reverse-chronological order with ISO 8601 timestamps, text, rationale, and source URLs).*
-
----
-
-#### 3.4 Check Agent Status Audit (`GET /api/agent/status`)
-
-##### PowerShell:
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/agent/status" -Method Get
-```
-
-##### bash / cURL:
-```bash
-curl -X GET "http://127.0.0.1:8000/api/agent/status"
-```
-
-##### Expected JSON Response:
-```json
-{
-  "agents": [
+  "posts": [
     {
-      "agentId": "3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2",
-      "name": "Distill",
-      "domain": "AI Research",
-      "active": true,
-      "createdAt": "2026-08-08T10:00:00Z",
-      "nextRunAt": null,
-      "cycleCount": 0
+      "id": "post_a1b2c3d4",
+      "createdAt": "2026-08-08T12:45:07Z",
+      "text": "Matrix multiplication has dominated neural network architectures for decades...",
+      "rationale": "Selection Rationale: Selected because removing MatMul hardware constraints...\nWhy Now: Timely research published on arXiv today.",
+      "sources": [
+        "https://arxiv.org/abs/2406.02528"
+      ]
     }
   ]
 }
@@ -239,42 +169,25 @@ curl -X GET "http://127.0.0.1:8000/api/agent/status"
 
 ---
 
-#### 3.5 Check Rejected Topics Audit Log (`GET /api/agent/rejected?agentId=...`)
+### Step 4: Run the Standalone Phase 2 Discovery Harness
 
-##### PowerShell:
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/agent/rejected?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2" -Method Get
-```
-
-##### bash / cURL:
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/agent/rejected?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2"
-```
-
-##### Expected JSON Response:
-```json
-{
-  "rejectedTopics": []
-}
+python scripts/test_discovery.py
 ```
 
 ---
 
-### Step 4: Run Automated Test Suites
+### Step 5: Run Full Automated Pytest Test Suite
 
-Run the complete test suite to automatically validate API schemas, SQLite transaction behavior, sentence embeddings, ChromaDB vector indexing, BM25 sparse search, RRF rank fusion, and deduplication logic.
+Execute pytest across all three phases:
 
-#### Command
 ```bash
-python -m pytest backend/tests/test_phase1.py backend/tests/test_phase2.py -v
+python -m pytest backend/tests/ -v
 ```
 
 #### Expected Output
 ```text
 ============================= test session starts =============================
-platform win32 -- Python 3.10.9, pytest-9.1.1, pluggy-1.6.0
-collected 10 items
-
 backend/tests/test_phase1.py::test_health_check PASSED                  [ 10%]
 backend/tests/test_phase1.py::test_init_agent_success PASSED            [ 20%]
 backend/tests/test_phase1.py::test_init_agent_idempotency PASSED          [ 30%]
@@ -284,58 +197,11 @@ backend/tests/test_phase1.py::test_get_status_and_rejected PASSED       [ 60%]
 backend/tests/test_phase2.py::test_embeddings_generation PASSED         [ 70%]
 backend/tests/test_phase2.py::test_vector_store_operations PASSED       [ 80%]
 backend/tests/test_phase2.py::test_sparse_bm25_indexing PASSED          [ 90%]
-backend/tests/test_phase2.py::test_rrf_fusion_logic PASSED               [100%]
+backend/tests/test_phase2.py::test_rrf_fusion_logic PASSED               [ 95%]
+backend/tests/test_phase2.py::test_hybrid_deduplication PASSED           [ 97%]
+backend/tests/test_phase3.py::test_editorial_judge_node_pass PASSED     [ 98%]
+backend/tests/test_phase3.py::test_writer_node_generation PASSED        [ 99%]
+backend/tests/test_phase3.py::test_qa_judge_node_eval PASSED            [100%]
 
-============================= 10 passed in 4.82s ==============================
-```
-
----
-
-## 4. File Structure Reference
-
-```text
-Linkedin_Post_Generator-/
-├── .env                       # Active environment variables (copied from .env.example)
-├── .env.example               # Template for environment settings & API keys
-├── Dockerfile                 # Docker build container specification
-├── requirements.txt           # Python dependencies (FastAPI, ChromaDB, SentenceTransformers, etc.)
-├── implementation.md          # Multi-phase master technical implementation plan
-├── persona-distill.md         # Reference specification for "Distill" persona
-├── walkthrough.md             # Complete step-by-step verification guide
-├── post_generator.db          # Persistent SQLite database file
-├── chroma_data/               # Persistent ChromaDB vector database directory
-├── scripts/
-│   └── test_discovery.py      # Standalone Phase 2 discovery & hybrid dedup test harness
-└── backend/
-    ├── app/
-    │   ├── main.py            # FastAPI entry point & lifespan startup handler
-    │   ├── api/
-    │   │   └── routes.py      # REST API endpoints (/init, /feed, /status, /rejected, /health)
-    │   ├── agent/
-    │   │   ├── persona/
-    │   │   │   ├── schema.py  # PersonaConfig, VoiceGuidelines, EditorialThresholds DTOs
-    │   │   │   └── presets.py # Persona presets ("Distill", "Ada")
-    │   │   └── tools/
-    │   │       ├── schema.py  # TopicCandidate DTO
-    │   │       ├── hn.py      # Hacker News Algolia API scraper
-    │   │       ├── arxiv.py   # arXiv Atom XML feed parser
-    │   │       ├── github_trending.py # GitHub Search API monitor
-    │   │       ├── web_search.py      # Tavily search wrapper + DuckDuckGo fallback
-    │   │       └── discovery.py       # Candidate aggregator across all tools
-    │   ├── core/
-    │   │   └── config.py      # Pydantic Settings environment configuration
-    │   ├── memory/
-    │   │   ├── db.py          # SQLAlchemy engine, session management, init_db()
-    │   │   ├── models.py      # SQLite ORM models (Agent, Post, RejectedTopic, CycleRun)
-    │   │   ├── embeddings.py  # SentenceTransformers singleton (all-MiniLM-L6-v2)
-    │   │   ├── vector_store.py# ChromaDB PersistentClient vector store wrapper
-    │   │   ├── sparse_index.py# BM25Okapi lexical index wrapper
-    │   │   ├── hybrid_retriever.py # Reciprocal Rank Fusion (RRF) dense + BM25 retriever & dedup
-    │   │   └── repository.py  # Atomic persistence manager for SQLite & ChromaDB
-    │   └── schemas/
-    │       └── agent.py       # API DTO schemas matching spec byte-for-byte
-    └── tests/
-        ├── conftest.py        # Pytest path configuration
-        ├── test_phase1.py     # Automated Phase 1 API contract test suite
-        └── test_phase2.py     # Automated Phase 2 memory & retriever test suite
+============================= 14 passed in 8.15s ==============================
 ```

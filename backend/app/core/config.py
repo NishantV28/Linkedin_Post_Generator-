@@ -14,8 +14,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./post_generator.db"
     
     # LLM & Search API Keys
+    GROQ_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     TAVILY_API_KEY: Optional[str] = None
+    
+    # LLM Provider & Model Settings
+    LLM_MODEL: Optional[str] = None  # e.g., 'llama-3.3-70b-versatile' for Groq or 'gpt-4o-mini' for OpenAI
+    LLM_BASE_URL: Optional[str] = None
     
     # Posting Cadence Bounds (hours)
     CADENCE_MIN_HOURS: float = 2.0
