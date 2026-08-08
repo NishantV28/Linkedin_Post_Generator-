@@ -19,7 +19,8 @@ class MemoryRepository:
         text: str,
         rationale: str,
         sources: List[str],
-        topic_title: Optional[str] = None
+        topic_title: Optional[str] = None,
+        kind: str = "topic"
     ) -> PostModel:
         """
         Saves a published post to SQLite and syncs its dense embedding to ChromaDB.
@@ -30,6 +31,7 @@ class MemoryRepository:
             rationale=rationale,
             sources_json=json.dumps(sources),
             topic_title=topic_title or "Untitled Topic",
+            kind=kind,
             created_at=utc_now()
         )
 
@@ -108,6 +110,20 @@ class MemoryRepository:
         return db.query(PostModel).filter(
             PostModel.agent_id == agent_id
         ).order_by(PostModel.created_at.desc()).limit(limit).all()
+
+    @staticmethod
+    def get_rejected_urls(db: Session, agent_id: str) -> set:
+        """
+        Source URLs this agent has already turned down.
+
+        Discovery returns the same items cycle after cycle, so without this the agent
+        re-judges known rejects at full LLM cost for the whole run.
+        """
+        rows = db.query(RejectedTopicModel.source_url).filter(
+            RejectedTopicModel.agent_id == agent_id,
+            RejectedTopicModel.source_url.isnot(None)
+        ).all()
+        return {row[0] for row in rows if row[0]}
 
     @staticmethod
     def get_rejected_topics(db: Session, agent_id: str, limit: int = 5) -> List[RejectedTopicModel]:

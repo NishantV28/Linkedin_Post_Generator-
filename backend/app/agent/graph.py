@@ -5,6 +5,7 @@ from langgraph.graph import StateGraph, END
 from backend.app.agent.state import AgentState
 from backend.app.agent.nodes.editorial_judge import editorial_judge_node
 from backend.app.agent.nodes.writer import writer_node
+from backend.app.agent.nodes.reflection_writer import reflection_writer_node
 from backend.app.agent.nodes.qa_judge import qa_judge_node
 from backend.app.agent.nodes.publish import publish_node
 from backend.app.agent.nodes.rejection_logger import log_candidate_rejection
@@ -16,6 +17,7 @@ MAX_REVISIONS = 2
 
 def start_cycle(state: AgentState) -> AgentState:
     """Initialize cycle state parameters."""
+    state.setdefault("mode", "topic")
     state["candidate_idx"] = 0
     state["retry_count"] = 0
     state["rejected_count"] = 0
@@ -79,7 +81,11 @@ def advance_candidate(state: AgentState) -> AgentState:
     return state
 
 # Routing logic functions
-def route_after_start(state: AgentState) -> Literal["editorial_judge", "__end__"]:
+def route_after_start(state: AgentState) -> Literal["editorial_judge", "reflection_writer", "__end__"]:
+    # A reflection post is about the agent's own coverage, so it needs no candidate
+    # and skips editorial judgement - but still goes through QA like any other post.
+    if state.get("mode") == "reflection" and state.get("coverage_trend"):
+        return "reflection_writer"
     if not state.get("current_candidate"):
         return END
     return "editorial_judge"
@@ -97,23 +103,29 @@ def route_after_writer(state: AgentState) -> Literal["qa_judge", "abort_cycle"]:
         return "abort_cycle"
     return "qa_judge"
 
-def route_after_qa(state: AgentState) -> Literal["publish", "writer", "log_rejection", "abort_cycle"]:
+def route_after_qa(state: AgentState) -> Literal["publish", "writer", "reflection_writer", "log_rejection", "abort_cycle"]:
     if state.get("node_error"):
         return "abort_cycle"
 
     qa = state.get("qa_verdict")
     retry_count = state.get("retry_count", 0)
+    is_reflection = state.get("mode") == "reflection"
 
     if qa and qa.verdict.lower() == "pass":
         return "publish"
 
-    # `retry_count` is incremented by writer_node, so it reflects revisions
+    # `retry_count` is incremented by the writing node, so it reflects revisions
     # already performed; allow up to MAX_REVISIONS of them.
     if qa and qa.verdict.lower() == "revise" and retry_count < MAX_REVISIONS:
-        logger.info(f"QA requested revision. Retrying writer node (Attempt {retry_count + 1}/{MAX_REVISIONS})")
-        return "writer"
+        logger.info(f"QA requested revision. Retrying (Attempt {retry_count + 1}/{MAX_REVISIONS})")
+        return "reflection_writer" if is_reflection else "writer"
 
-    # QA failed after retries
+    # A reflection that cannot pass QA is abandoned; there is no next candidate to
+    # advance to, and publishing an unreviewed one is worse than staying quiet.
+    if is_reflection:
+        logger.info("Reflection post failed QA after revisions. Skipping this cycle.")
+        return "abort_cycle"
+
     return "log_rejection"
 
 def route_after_advance(state: AgentState) -> Literal["editorial_judge", "__end__"]:
@@ -129,6 +141,7 @@ def build_agent_graph():
     workflow.add_node("start_cycle", start_cycle)
     workflow.add_node("editorial_judge", editorial_judge_node)
     workflow.add_node("writer", writer_node)
+    workflow.add_node("reflection_writer", reflection_writer_node)
     workflow.add_node("qa_judge", qa_judge_node)
     workflow.add_node("publish", publish_node)
     workflow.add_node("log_rejection", log_rejection)
@@ -142,6 +155,7 @@ def build_agent_graph():
     workflow.add_conditional_edges("start_cycle", route_after_start)
     workflow.add_conditional_edges("editorial_judge", route_after_judge)
     workflow.add_conditional_edges("writer", route_after_writer)
+    workflow.add_conditional_edges("reflection_writer", route_after_writer)
     workflow.add_conditional_edges("qa_judge", route_after_qa)
     workflow.add_edge("log_rejection", "advance_candidate")
     workflow.add_edge("abort_cycle", END)

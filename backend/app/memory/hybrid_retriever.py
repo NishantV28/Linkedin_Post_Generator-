@@ -28,6 +28,11 @@ DENSE_NEAR_IDENTICAL = 0.25   # drop on semantics alone
 DENSE_BORDERLINE = 0.55       # drop only with lexical corroboration
 LEXICAL_CORROBORATION = 0.40  # IDF-weighted share of the candidate's distinctive terms
 
+# Distance below which a candidate counts as "same subfield as the last post" for
+# spacing purposes. Looser than the duplicate thresholds above: these are different
+# topics, just adjacent ones.
+TOPIC_SPACING_DISTANCE = 0.55
+
 
 def _idf_weights(tokenized_docs: List[List[str]]) -> Dict[str, float]:
     """
@@ -170,6 +175,64 @@ class HybridRetriever:
             f"Novel (distance {best_dense_distance:.3f}, "
             f"lexical overlap {best_lexical_overlap:.0%})"
         ), scores
+
+    @staticmethod
+    def order_by_topic_spacing(
+        candidates: List[TopicCandidate],
+        agent_id: str,
+        db: Session,
+        spacing_distance: float = TOPIC_SPACING_DISTANCE,
+    ) -> List[TopicCandidate]:
+        """
+        Push candidates that closely echo the most recent post to the back of the queue.
+
+        Deduplication only catches repeats of the *same* topic. This addresses the
+        softer problem of several consecutive posts from one narrow subfield, which
+        makes a feed read as a monoculture even when every post is individually novel.
+
+        Deliberately a reordering, not a filter: if nothing else clears the editorial
+        bar, a closely-related topic is still published rather than the agent going
+        silent. That matches "unless there's a genuine reason" in the persona brief.
+        """
+        if len(candidates) < 2:
+            return candidates
+
+        recent = (
+            db.query(PostModel)
+            .filter(PostModel.agent_id == agent_id)
+            .order_by(PostModel.created_at.desc())
+            .first()
+        )
+        if not recent:
+            return candidates
+
+        try:
+            last_embedding = embed(f"{recent.topic_title or ''} {recent.text}")
+        except Exception as err:
+            logger.debug(f"Topic spacing skipped, embedding unavailable: {err}")
+            return candidates
+
+        import numpy as np
+
+        last_vec = np.array(last_embedding)
+        last_norm = np.linalg.norm(last_vec) or 1.0
+
+        near, rest = [], []
+        for cand in candidates:
+            try:
+                vec = np.array(embed(f"{cand.title} {cand.summary}"))
+                distance = 1.0 - float(vec @ last_vec) / (float(np.linalg.norm(vec) or 1.0) * last_norm)
+            except Exception:
+                rest.append(cand)
+                continue
+            (near if distance <= spacing_distance else rest).append(cand)
+
+        if near:
+            logger.info(
+                "Topic spacing: deferring %d candidate(s) closely related to the last post "
+                "('%s')", len(near), (recent.topic_title or "")[:50]
+            )
+        return rest + near
 
     @staticmethod
     def get_relevant_context(agent_id: str, query_text: str, db: Session, top_k: int = 3) -> List[Dict[str, Any]]:

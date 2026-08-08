@@ -49,6 +49,8 @@ Start at [Suggested order](#suggested-order) for the working sequence.
 | — | Structured-output method hardcoded per model | **Done** | `agent/llm.py` |
 | — | Worked example copied verbatim into posts | **Done** | `persona/voice.py`, `nodes/qa_judge.py`, `prompts/writer.py` |
 | A-4 | **Candidate pre-filter — 63% fewer LLM calls** | **Done** | `tools/prefilter.py`, `tools/hn.py`, `tools/arxiv.py`, `core/scheduler.py` |
+| A-6 | Startup LLM self-check | **Done** | `agent/llm.py`, `main.py` |
+| A-2 | Memory that changes decisions | **Done** | `memory/repository.py`, `memory/hybrid_retriever.py`, `memory/reflection.py`, `nodes/reflection_writer.py`, `prompts/reflection.py`, `agent/graph.py`, `core/scheduler.py` |
 
 All **22** tests pass after these changes (4 added during this work).
 
@@ -108,7 +110,7 @@ Stage 2 flags "little or no development activity during the hackathon, followed 
 
 **Hardening (still to do):** validate the model at startup with one throwaway structured call, and fail loudly rather than degrading into fake rejections.
 
-- [ ] Add startup model validation
+- [x] Add startup model validation — see [A-6](#a-6-autonomy-robustness)
 - [x] Stop writing runtime errors into `rejected_topics` — done via [P1-5](#p1-5-llm-failures-publish-garbage-instead-of-skipping--done); the cycle now aborts with an `aborted_error` outcome instead
 
 ---
@@ -225,7 +227,7 @@ This also explains why almost nothing cleared the editorial bar once thresholds 
 
 ---
 
-### P0-6. `.env` cadence was dead config ✅ DONE
+### P0-6. `.env` cadence was dead config ✅ DONE *(doc update outstanding)*
 
 `POST /api/agent/init` scheduled from `persona_config.posting_cadence_hours` (2.5-4.5 h for Distill). `CADENCE_MIN_HOURS` / `CADENCE_MAX_HOURS` were only a `.get()` fallback in the scheduler loop — and since `persona_json` always contains a cadence, **the fallback could never fire**. The env vars did nothing, while [walkthrough.md](walkthrough.md) instructed users to set them.
 
@@ -242,19 +244,17 @@ Rather than editing the preset (cadence is part of the persona's identity — th
 
 ---
 
-### P0-4. Stale content published as news — *largely resolved by [P1-1](#p1-1-editorial-thresholds-are-never-enforced-in-code--done)*
+### P0-4. Stale content published as news ✅ DONE
 
 **Confirmed live.** The published post covers `arXiv:2309.10305` (Baichuan 2) — a **September 2023** paper — and its rationale claims *"Baichuan 2 arrives while reproducibility and independent evaluation are hot concerns, making its release timely."* Presenting a three-year-old paper as current news is immediately visible to a judge.
 
 **Root cause.** [hn.py:30-34](backend/app/agent/tools/hn.py#L30-L34) queries Algolia's relevance-sorted `/search` with no date filter, so it returns stories from any year.
 
-**Fix.**
-- Add `numericFilters=created_at_i>{now - 72h}` to the HN query, or use `search_by_date`
-- Add a hard recency gate in discovery: drop any candidate whose `published_at` is older than N days before it ever reaches the judge
-- Enforce `min_timeliness` (see P1-1)
+**Fixed in three places, each closing a different route to stale content:**
 
-- [ ] HN recency filter
-- [ ] Global `published_at` cutoff in [discovery.py](backend/app/agent/tools/discovery.py)
+- [x] **`min_timeliness` enforced in code** ([P1-1](#p1-1-editorial-thresholds-are-never-enforced-in-code--done)) — the Baichuan paper now scores 3/10 and is rejected automatically
+- [x] **HN recency window** — `numericFilters=created_at_i>` over 21 days. Live runs had been surfacing stories **140, 1046, 2404 and 5717 days old**; HN went from 15 stale candidates to 5 current ones
+- [x] **Global age cutoff before any LLM call** — the pre-filter ([A-4](#a-4-editorial-decision-quality--pre-filter--done)) drops anything older than 30 days, so stale items never reach the judge at all
 
 ---
 
@@ -332,7 +332,7 @@ Live cycle: 1 published / 7 rejected. Tests: 18 passing, including a new one ass
 
 ---
 
-### P1-3. Memory is written but never read by the judges ✅ DONE (judges)
+### P1-3. Memory is written but never read by the judges ✅ DONE
 
 `recent_post_titles` in [editorial_judge.py:47](backend/app/agent/nodes/editorial_judge.py#L47) and `recent_posts` in [qa_judge.py:39](backend/app/agent/nodes/qa_judge.py#L39) are both hardcoded to `"None in memory."`
 
@@ -343,8 +343,7 @@ This is the single biggest gap against the "effective use of memory" criterion �
 - [x] **`get_recent_posts` wired into the editorial judge** — last 8 published titles, with an explicit instruction to reject anything covering the same ground under a different headline. Catches repeats the embeddings miss.
 - [x] **Recent post bodies wired into the QA judge** — the `non_repetitive` check now has something to compare against instead of the literal string `"None in memory."`
 - [x] Both loaders fail soft: a memory error logs and degrades, it never blocks judging
-- [ ] Add callbacks: instruct the writer to occasionally reference a retrieved past post (the retrieval already happens in [writer.py](backend/app/agent/nodes/writer.py)) — tracked in [A-2](#a-2-memory-that-changes-decisions-not-just-dedup)
-- [ ] Add self-noticing: after N posts, let the persona comment on its own coverage trend — tracked in [A-2](#a-2-memory-that-changes-decisions-not-just-dedup)
+- [x] Callbacks and self-noticing — delivered under [A-2](#a-2-memory-that-changes-decisions-not-just-dedup--done)
 
 ---
 
@@ -416,17 +415,7 @@ The claim is backed by real decisions rather than asserted, which is what the br
 | Cycle outcome | looked like normal rejections | `aborted_error: ... 429 ... (TPD)` |
 
 > ### ⚠️ Token budget for the real run
-> The 200k/day cap is a live constraint, not a test artifact. One cycle costs roughly one editorial call per candidate (~27) plus writer and QA calls. Before the 48-hour run, take [A-4](#a-4-editorial-decision-quality)'s cheap pre-filter seriously — dropping stale and low-credibility candidates before the LLM sees them is the single biggest saving — and consider a paid tier or a second provider key.
-
-**Original notes**
-
-- [writer.py](backend/app/agent/nodes/writer.py) falls back to `"Interesting developments in {domain}: {title}…"` — completely off-voice
-- [qa_judge.py:66-72](backend/app/agent/nodes/qa_judge.py#L66-L72) **auto-passes** on error
-
-Together, one rate-limit blip puts template junk in the graded feed. Groq's free tier already returned **429s** during the local run.
-
-- [ ] Writer failure → skip candidate, log as an error outcome (never publish a fallback)
-- [ ] QA failure → treat as `revise`/skip, never auto-pass
+> The 200k/day cap is a live constraint, not a test artifact. One cycle costs roughly one editorial call per candidate (~27) plus writer and QA calls. Before the 48-hour run, the [A-4](#a-4-editorial-decision-quality--pre-filter--done) pre-filter now cuts this to ~12k tokens/cycle — dropping stale and low-credibility candidates before the LLM sees them is the single biggest saving — and consider a paid tier or a second provider key.
 
 ---
 
@@ -440,10 +429,11 @@ Together, one rate-limit blip puts template junk in the graded feed. Groq's free
 - **Web search returns non-articles.** The query in [web_search.py:24](backend/app/agent/tools/web_search.py#L24) is `"latest {keyword} research breakthrough"`, and a live run returned *"latest, late, latests — WordWeb dictionary definition"*, *"CBS News | Breaking news"*, and *"ABC News"*. The leading word "latest" is dominating the match. Drop it and query the interest term directly.
 - **Rejections aren't remembered.** Rejected topics never enter the vector store, so the same item is re-discovered and re-judged at full LLM cost every cycle for 48h.
 
+- [x] **Skip previously rejected items pre-LLM** — `MemoryRepository.get_rejected_urls` ([A-2](#a-2-memory-that-changes-decisions-not-just-dedup--done)). Kept in SQLite rather than the vector store: an exact URL match is the right test here, and it needs no embedding call.
+- [x] **HN recency window** — also closes [P0-4](#p0-4-stale-content-published-as-news--done)
 - [ ] Rotate discovery keywords per cycle
-- [ ] Enrich HN summaries
-- [ ] Tighten GitHub query
-- [ ] Persist rejections to the vector store and skip them pre-LLM
+- [ ] Enrich HN summaries — still `"{title}. Points: N, Comments: M"`, which is thin enough to invite invented detail
+- [ ] Tighten GitHub query, and drop the leading "latest" from the web query
 
 ### P2-2. Persona/domain mismatch on arbitrary init
 
@@ -451,11 +441,12 @@ Together, one rate-limit blip puts template junk in the graded feed. Groq's free
 
 - [ ] Either synthesize a full `PersonaConfig` from the requested domain at init (one LLM call), or deliberately keep the fixed identity and document that choice in the README
 
-### P2-3. Feed contract edge case
+### P2-3. Feed contract edge case ✅ DONE
 
 [routes.py:104-109](backend/app/api/routes.py#L104-L109) returns **404** for an unknown `agentId`. If the host ever resets its disk, the evaluator's saved id 404s forever instead of degrading to `{"posts": []}`.
 
-- [ ] Return an empty feed rather than 404
+- [x] **The dashboard now recovers** — a 404 clears the stored agent and returns to the init screen instead of showing an error with no way out. Hit three times during local testing after database resets.
+- [x] **The API still returns 404**, deliberately. An unknown agent genuinely is *not found*, and silently returning `{"posts": []}` would disguise a real problem as an empty feed — the same mistake behind most of the bugs above. The client degrades; the API stays honest.
 
 ### P2-4. First-post latency
 
@@ -463,12 +454,13 @@ The first cycle is scheduled 2–5h after init ([routes.py:77](backend/app/api/r
 
 - [ ] Run the first cycle ~60–120s after init, then fall into the normal jittered cadence
 
-### P2-5. Rate limits
+### P2-5. Rate limits ✅ DONE
 
 Groq's free tier returned 429s while evaluating 22 candidates in one cycle.
 
-- [ ] Cap candidates evaluated per cycle (e.g. 8)
-- [ ] Add backoff//jitter between judge calls
+- [x] **Candidates capped at 10/cycle** by the pre-filter ([A-4](#a-4-editorial-decision-quality--pre-filter--done))
+- [x] **Retries on transient failures** — `with_retry(stop_after_attempt=3)` on every structured call. `llama-3.3-70b` returns a malformed tool call roughly 1 time in 3, which was aborting whole cycles; retries took it to 5/5.
+- [x] **Quota exhaustion is survivable** — the cycle aborts cleanly and the scheduler retries next cadence ([P1-5](#p1-5-llm-failures-publish-garbage-instead-of-skipping--done))
 
 ### P2-6. Deployment
 
@@ -480,17 +472,28 @@ Groq's free tier returned 429s while evaluating 22 candidates in one cycle.
 - [ ] Prefetch embedding model in the image
 - [ ] Confirm host has a persistent volume and does not sleep
 
-### P2-7. Broken helper in the test harness
+### P2-7. Broken helper in the test harness ✅ DONE
 
 [test_cycle.py:125](scripts/test_cycle.py#L125) calls `MemoryRepository.get_rejected_topics(...)`, which does not exist in [repository.py](backend/app/memory/repository.py). The script prints the published post correctly, then crashes with `AttributeError`.
 
-- [ ] Add `get_rejected_topics` to `MemoryRepository`
+- [x] Added `get_rejected_topics` to `MemoryRepository`
 
-### P2-8. Console encoding
+### P2-9. Dashboard shows the wrong persona
+
+The sidebar renders `DEFAULT_PERSONA`, hardcoded in [App.jsx](frontend/src/App.jsx) — bio *"following the stories that matter before they become consensus"* with tags `prompt injection`, `supply chain`, `red-teaming`, `evaluation`. Those are AI-security interests, closer to Ada than to Distill.
+
+So the header describes a security desk while the feed beneath it publishes AI-research posts. It is the first thing a judge assessing **persona consistency** sees, and it contradicts everything below it. `/status` returns only name, domain, active and cycle count, so the frontend has nothing real to render.
+
+- [ ] Return the persona's `bio` and `stable_interests` from `/status`
+- [ ] Render those instead of the frontend's own constants
+
+---
+
+### P2-8. Console encoding ✅ DONE
 
 Post text contains `U+202F` and curly quotes; printing to a Windows cp1252 console raises `UnicodeEncodeError`. The JSON API is unaffected — this only breaks the local scripts.
 
-- [ ] `sys.stdout.reconfigure(encoding="utf-8")` at the top of the scripts
+- [x] `sys.stdout.reconfigure(encoding="utf-8")` guard added to all three scripts
 
 ---
 
@@ -514,14 +517,22 @@ Judging criterion: **consistency of the AI persona**.
 - [ ] **Style-drift guard**: embed each new post, compare against the centroid of prior posts, trigger a revision if it drifts beyond a threshold. Makes consistency *measurable* instead of hoped-for, and reuses the embedding infrastructure already present.
 - [ ] Programmatic check that the draft closes with a separated takeaway line, mirroring the existing forbidden-phrase check in [qa_judge.py:48-54](backend/app/agent/nodes/qa_judge.py#L48-L54)
 
-### A-2. Memory that changes decisions, not just dedup
+### A-2. Memory that changes decisions, not just dedup ✅ DONE
 
 Judging criterion: **effective use of memory**. Most submissions will stop at deduplication; these go further.
 
-- [ ] **Topic spacing** — the persona doc specifies avoiding back-to-back posts from the same narrow subfield. Nothing currently prevents five consecutive reasoning-paper posts.
-- [ ] **Callbacks** — *"this connects to the training trick I wrote about two days ago."* The writer already retrieves topically-related past posts ([writer.py:33-38](backend/app/agent/nodes/writer.py#L33-L38)) and then ignores them.
-- [ ] **Self-noticing** — *"three of my last five posts were about reasoning; here's why."* Reads as genuine continuity rather than a dedup checkbox.
-- [ ] **Rejection memory** — the same rejected item is currently re-discovered and re-judged at full LLM cost every cycle for 48 hours.
+- [x] **Topic spacing** — `HybridRetriever.order_by_topic_spacing` defers candidates within 0.55 cosine distance of the most recent post. Deliberately a *reordering*, not a filter: if nothing else clears the editorial bar the related topic still publishes, matching "unless there's a genuine reason" in the persona brief. Verified: a self-critique-reasoning candidate was pushed behind an unrelated sparse-attention one when the last post was about self-critique reasoning.
+- [x] **Callbacks** — the writer prompt now permits one short reference back to a retrieved past post when the connection is real, with explicit instructions never to force it and never to cite a post not in its retrieved context. The retrieval already existed and was being discarded.
+- [x] **Rejection memory** — `MemoryRepository.get_rejected_urls` skips candidates this agent has already turned down, before any LLM call. Discovery returns the same items every cycle, so this compounds over a 48-hour run.
+- [x] **Self-noticing** — the agent now occasionally publishes a post about a pattern in its *own* coverage instead of a new source.
+
+  The trend is detected **deterministically** in [memory/reflection.py](backend/app/memory/reflection.py) and handed to the model. A model asked "do you notice a pattern?" always answers yes, so it is only ever asked to *write about* a pattern that was already found. Requires 5+ posts, 3+ of the last 5 on related ground, and 5 ordinary posts since the last reflection.
+
+  `TREND_DISTANCE` calibrated on measured pairs: posts within one subfield sat at 0.56-0.75, unrelated pairs at 0.82-0.99. Grouping is anchor-based, so a theme forms when one post is close to several others rather than every pair being mutually close.
+
+  Reflections flow through the **same QA gate** as ordinary posts rather than bypassing it, with their factual grounding checked against the agent's own post history. They carry `kind="reflection"` (added via a lightweight migration so existing databases keep working), cite the sources of the posts they reflect on, and a reflection that fails QA is abandoned rather than published unreviewed.
+
+  Verified: trend detection across four scenarios (too few posts / real theme / varied feed / just reflected), routing through the live graph including the revise loop returning to the reflection writer, and the publish path with source de-duplication.
 
 ### A-3. Transparency beyond the minimum
 
@@ -565,14 +576,6 @@ A 48-hour run needs ~13-16 cycles, so `gpt-oss-120b` — the stricter judge — 
 
 ---
 
-### A-4 original notes
-
-Judging criterion: **quality of editorial decision-making**.
-
-- [ ] Enforce thresholds in code, including `min_timeliness` ([P1-1](#p1-1-editorial-thresholds-are-never-enforced-in-code))
-- [ ] **Source corroboration** — a story appearing across two or more independent sources should score higher on credibility than a single Ask HN post
-- [ ] **Cheap pre-filter before the LLM** — recency and source-type priors, applied in discovery. Saves rate-limit budget and stops obviously-dead candidates consuming judge calls.
-
 ### A-5. Feed coherence across the window
 
 Judging criterion: **overall quality and coherence of the generated feed**.
@@ -584,31 +587,40 @@ Judging criterion: **overall quality and coherence of the generated feed**.
 
 Judging criterion: **autonomous operation after initialization**.
 
-- [ ] **Startup self-check** that the LLM answers a structured-output call, failing loudly on error. This is precisely the failure that would otherwise have produced zero posts for 48 hours with no visible symptom ([P0-1](#p0-1-structured-output-fails-on-the-default-model--mitigated)).
-- [ ] Backoff for the 429s already observed on Groq's free tier ([P2-5](#p2-5-rate-limits))
+- [x] **Startup self-check** — `validate_llm_configuration()` makes one cheap structured-output call at startup and classifies the outcome: unsupported response format, rate limit, or other. Logged as a banner error when it fails, and surfaced on `/health` as `canPublish`, so a deployed instance can be checked from outside without waiting a full cadence to discover it publishes nothing. Verified against all three failure modes plus the healthy path.
+
+  > `status` stays `"ok"` when the check fails - the process really is healthy, and returning unhealthy would make a platform restart-loop a container that is serving requests correctly. `canPublish: false` is the signal that matters.
+- [x] Retries and clean abort on the 429s observed on Groq's free tier ([P2-5](#p2-5-rate-limits--done))
 - [ ] Deployment hardening ([P2-6](#p2-6-deployment))
 
 ---
 
 ## Suggested order
 
+### Completed
+
+`P0-2` retry counter · `P0-3` dedup threshold · `P0-4` stale content · `P0-5` arXiv ·
+`P0-6` cadence config · `P1-1` thresholds · `P1-2` persona voice · `P1-3` memory in judges ·
+`P1-4` rationale · `P1-5` fail-closed · `P1-6` rejection log · `P2-3` feed 404 ·
+`P2-5` rate limits · `P2-7` harness · `P2-8` encoding · `A-2` memory behaviours ·
+`A-4` pre-filter · `A-6` startup self-check
+
+23 tests passing.
+
+### Remaining
+
 | # | Work | Why in this position |
 |---|---|---|
-| ✅ | ~~**P0-2** retry counter~~ | done — was silently burning whole cycles |
-| ✅ | ~~**P0-3** dedup threshold~~ | done — was stalling the feed over time |
-| ✅ | ~~**P2-7** + **P2-8**~~ | done — a full cycle now runs and prints end-to-end |
-| **1** | **S0-1** AI Usage Log | Removes a disqualification risk for ~30 min of work. Outranks everything else — quality is irrelevant if the submission is never scored. |
-| ✅ | ~~**P1-2** writer prompt~~ | done — the persona doc now drives the writer and QA judge |
-| ✅ | ~~**P1-1** + **P1-3**~~ | done — thresholds enforced, memory wired into both judges |
-| ✅ | ~~**P0-5** arXiv~~ | done — found while diagnosing an empty feed; the single most consequential defect |
-| ✅ | ~~**P1-6** + **P1-4** + **P1-5**~~ | done — rejection log is trustworthy, rationale cites alternatives, API errors no longer masquerade as editorial decisions |
-| **5** | **S0-1** fill in the AI log placeholders, then **S0-2** deploy | ← *next*. Both are Stage 1 pass/fail and deployment needs soak time |
-| ✅ | ~~**A-4** cheap pre-filter~~ | done — 63% fewer LLM calls, which restored the stricter model |
-| **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
-| **5** | **P0-4** recency filter | Stops stale content being published as news |
-| **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
-| **7** | **S0-2** deploy + **A-6** startup self-check | Stage 1 requirement; needs soak time before the real run |
-| **8** | **P1-5** fail-closed, **A-1** drift guard, **A-4** corroboration | Polish if time remains |
+| **1** | **S0-1** — fill the `TO COMPLETE` sections in [AI_USAGE_LOG.md](AI_USAGE_LOG.md) | Stage 1 pass/fail. **Your action only** — the tool and prompts used in Phases 1-5 cannot be written by anyone else, and an unfilled log is worse than a short one. Quality is irrelevant if the submission is never scored. |
+| **2** | **S0-2** + **P2-6** — deploy to an always-on host | Stage 1 pass/fail, and the only item that needs *elapsed time* rather than work: it has to stay up for the full window. Includes the `Dockerfile` `PYTHONPATH` fix, an embedding-model prefetch layer, and a persistent volume. |
+| **3** | **P2-4** — run the first cycle ~60-120s after init | An evaluator polling in the first hour currently sees an empty feed, because the first cycle is 2.5-4.5h away. Small change, disproportionate effect on the "autonomous publishing" impression. |
+| **4** | **P2-9** — serve the real persona to the dashboard | The sidebar currently contradicts the feed. First thing seen when assessing persona consistency. |
+| **5** | **P2-2** — persona/domain mismatch on arbitrary init | The brief's own example inits with `{"name": "Ada", "domain": "AI Security"}`. If the evaluator uses a persona that matches no preset, Distill's `cs.LG` interests drive discovery while the agent claims another identity. |
+| **6** | **A-3** — visible editorial restraint | *"Skipped two papers this round — both were bigger models with the same trick."* Puts judgment in the feed itself, not only in a debug endpoint. Specified in the persona doc, unbuilt. |
+| **7** | **P0-6 docs** + **P2-1** discovery polish | [walkthrough.md](walkthrough.md) still documents the cadence behaviour that was fixed; HN summaries are still thin; the web query still leads with "latest". |
+| **8** | **A-1** drift guard · **A-5** post variety · **A-4** corroboration | Genuine polish. Worth doing only if 1-5 are complete and the deployment is soaking. |
+
+> **Items 1 and 2 are the only ones that can disqualify the submission.** Everything below them affects score, not eligibility. If time is short, do those two and stop.
 
 ---
 

@@ -37,11 +37,27 @@ def qa_judge_node(state: AgentState) -> AgentState:
     Evaluates draft post against persona forbidden phrases, tone, and factual grounding.
     """
     draft = state.get("draft")
-    cand = state["current_candidate"]
+    cand = state.get("current_candidate")
     persona = state["persona"]
+    trend = state.get("coverage_trend")
 
-    if not draft or not cand:
-        logger.warning("Missing draft or candidate in qa_judge_node.")
+    if not draft:
+        logger.warning("Missing draft in qa_judge_node.")
+        return state
+
+    # A reflection post has no source candidate; its claims must instead be grounded
+    # in the agent's own published history, so that is what QA checks against.
+    if cand is not None:
+        grounding = cand.summary
+        subject = cand.title
+    elif trend:
+        grounding = (
+            "The agent's own recent posts, which this reflection must not "
+            "misrepresent:\n" + "\n".join(f"- {t}" for t in trend["titles"])
+        )
+        subject = "reflection on recent coverage"
+    else:
+        logger.warning("Missing candidate and coverage trend in qa_judge_node.")
         return state
 
     try:
@@ -64,7 +80,7 @@ def qa_judge_node(state: AgentState) -> AgentState:
         )
 
         user_msg = QA_JUDGE_USER_PROMPT.format(
-            candidate_summary=cand.summary,
+            candidate_summary=grounding,
             draft_text=draft.text,
             recent_posts=_recent_post_texts(state.get("agent_id", ""))
         )
@@ -116,7 +132,7 @@ def qa_judge_node(state: AgentState) -> AgentState:
     except Exception as e:
         # Fail closed. Auto-passing on error meant an API blip published an unreviewed
         # draft - the opposite of what a quality gate is for.
-        logger.error(f"QA judge could not review draft for '{cand.title[:45]}...': {e}", exc_info=True)
+        logger.error(f"QA judge could not review draft for '{subject[:45]}...': {e}", exc_info=True)
         state["qa_verdict"] = None
         state["node_error"] = f"qa_judge: {e}"
 

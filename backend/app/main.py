@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.memory.db import init_db
 from backend.app.api.routes import router as agent_router
+from backend.app.agent.llm import validate_llm_configuration
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +24,21 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing SQLite database tables...")
     init_db()
     logger.info("Database initialization complete.")
+
+    # Fail loudly, not silently. A model that cannot return structured output breaks
+    # every node, and the symptom is an empty feed rather than an error - so this is
+    # checked once at startup and surfaced on /health for a deployed instance.
+    llm_ok, llm_detail = validate_llm_configuration()
+    app.state.llm_ok = llm_ok
+    app.state.llm_detail = llm_detail
+    if llm_ok:
+        logger.info(llm_detail)
+    else:
+        logger.error("=" * 78)
+        logger.error("LLM CONFIGURATION CHECK FAILED - the agent will not publish.")
+        logger.error(llm_detail)
+        logger.error("=" * 78)
+
     logger.info("Re-arming autonomous background scheduler tasks...")
     rearm_active_agents()
     yield
@@ -52,5 +68,20 @@ app.include_router(agent_router)
 
 @app.get("/health", tags=["health"])
 def health_check():
-    """Service health check endpoint."""
-    return {"status": "ok", "environment": settings.ENVIRONMENT}
+    """
+    Service health check.
+
+    Reports the startup LLM check too: the process can be perfectly healthy while the
+    agent is incapable of publishing, and that distinction is invisible from /feed.
+    """
+    llm_ok = getattr(app.state, "llm_ok", None)
+    return {
+        "status": "ok",
+        "environment": settings.ENVIRONMENT,
+        "llm": {
+            "ok": llm_ok,
+            "model": settings.LLM_MODEL or "(provider default)",
+            "detail": getattr(app.state, "llm_detail", "not checked"),
+        },
+        "canPublish": bool(llm_ok),
+    }

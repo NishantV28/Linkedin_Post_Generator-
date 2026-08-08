@@ -46,6 +46,12 @@ HARD RULES
 PAST WORK - match this voice, do not repeat this content
 {few_shot_context}
 
+If one of those past posts genuinely connects to this topic - the same technique
+reappearing, a result that supports or contradicts what you wrote before - you may
+refer back to it in one short clause ("this is the same trick I wrote about last
+week"). Only when the link is real and adds something. Never force it, never refer
+to a post that is not listed above, and never use it as filler.
+
 OUTPUT
 - text: the post itself, following the structure above.
 - rationale_selected: why this topic specifically, in terms of your stated interests and

@@ -1,7 +1,8 @@
 import os
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Optional, Tuple, Type
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 from backend.app.core.config import settings
 
 logger = logging.getLogger("autonomous_agent.agent.llm")
@@ -20,6 +21,47 @@ def structured_output_method(model_name: str) -> Optional[str]:
     if model_name.startswith(JSON_SCHEMA_MODEL_PREFIXES):
         return None  # native json_schema support
     return "function_calling"
+
+
+class LLMCheck(BaseModel):
+    """Trivial schema used only to prove structured output works."""
+    ok: bool = Field(..., description="Always true")
+
+
+def validate_llm_configuration() -> Tuple[bool, str]:
+    """
+    Prove at startup that the configured model can actually return structured output.
+
+    Every node depends on this, and when it fails it fails for every candidate. The
+    agent has twice been left publishing nothing for hours because a model silently
+    rejected the request format - once a 400 for an unsupported response format, once
+    an exhausted token quota - while the logs showed ordinary editorial activity.
+
+    One cheap call at startup turns that into a message an operator can act on.
+    """
+    try:
+        checker = get_structured_llm(LLMCheck, temperature=0.0)
+        checker.invoke([
+            ("system", "Reply with ok=true."),
+            ("user", "ping"),
+        ])
+    except Exception as exc:
+        detail = str(exc)
+        model = settings.LLM_MODEL or "(provider default)"
+        if "rate_limit" in detail or "429" in detail:
+            return False, (
+                f"Model '{model}' is reachable but rate limited right now. Cycles will "
+                f"abort until quota frees up. Detail: {detail[:200]}"
+            )
+        if "response_format" in detail or "json_schema" in detail or "tool_use_failed" in detail:
+            return False, (
+                f"Model '{model}' cannot produce the structured output every node "
+                f"requires. Choose a model that supports it, or the agent will publish "
+                f"nothing. Detail: {detail[:200]}"
+            )
+        return False, f"Model '{model}' failed a startup check: {detail[:200]}"
+
+    return True, f"Structured output confirmed for model '{settings.LLM_MODEL or '(provider default)'}'."
 
 
 def get_structured_llm(schema: Type[Any], temperature: float = 0.2, model_name: Optional[str] = None):

@@ -45,4 +45,8 @@ class AgentState(TypedDict):
     rejected_count: int
     # Candidates passed over during this cycle, cited by the published post's rationale.
     rejected_this_cycle: List[Dict[str, str]]
+    # "topic" for an ordinary cycle, "reflection" when the agent writes about a
+    # pattern in its own recent coverage instead of a new source.
+    mode: str
+    coverage_trend: Optional[Dict[str, Any]]
     cycle_outcome: str

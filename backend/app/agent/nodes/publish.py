@@ -54,16 +54,30 @@ def publish_node(state: AgentState) -> AgentState:
     Persists accepted post to SQLite relational memory and ChromaDB vector store.
     """
     draft = state.get("draft")
-    cand = state["current_candidate"]
+    cand = state.get("current_candidate")
     agent_id = state.get("agent_id", "")
+    trend = state.get("coverage_trend")
+    is_reflection = state.get("mode") == "reflection"
 
-    if not draft or not cand or not agent_id:
-        logger.error("Publish node missing required state data (draft, candidate, or agent_id).")
+    if not draft or not agent_id or (cand is None and not trend):
+        logger.error("Publish node missing required state data (draft, candidate/trend, or agent_id).")
         state["cycle_outcome"] = "publish_error"
         return state
 
     full_rationale = _build_rationale(draft, state)
-    sources = [cand.url] if cand.url else []
+
+    if is_reflection:
+        # A reflection cites the posts it is reflecting on, so its sources are the
+        # sources of those posts rather than a single new link.
+        seen, sources = set(), []
+        for url in (trend or {}).get("sources", []):
+            if url and url not in seen:
+                seen.add(url)
+                sources.append(url)
+        topic_title = "Reflection: recent coverage"
+    else:
+        sources = [cand.url] if cand.url else []
+        topic_title = cand.title
 
     db = SessionLocal()
     try:
@@ -73,7 +87,8 @@ def publish_node(state: AgentState) -> AgentState:
             text=draft.text,
             rationale=full_rationale,
             sources=sources,
-            topic_title=cand.title
+            topic_title=topic_title,
+            kind="reflection" if is_reflection else "topic"
         )
 
         logger.info(f"SUCCESS: Published post '{post_record.id}' for agent '{agent_id}' to SQLite + ChromaDB.")

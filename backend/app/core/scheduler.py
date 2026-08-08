@@ -12,6 +12,8 @@ from backend.app.agent.persona.schema import PersonaConfig
 from backend.app.agent.tools.discovery import discover_all_candidates
 from backend.app.agent.tools.prefilter import prefilter_candidates
 from backend.app.memory.hybrid_retriever import HybridRetriever
+from backend.app.memory.repository import MemoryRepository
+from backend.app.memory.reflection import detect_coverage_trend
 from backend.app.agent.graph import agent_graph
 
 logger = logging.getLogger("autonomous_agent.core.scheduler")
@@ -85,6 +87,16 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
 
         raw_candidates = prefilter_candidates(raw_candidates, persona)
 
+        # Memory of past rejections: discovery returns the same items every cycle, so
+        # without this the agent re-judges known rejects at full LLM cost all run.
+        already_rejected = MemoryRepository.get_rejected_urls(db, agent.id)
+        if already_rejected:
+            before = len(raw_candidates)
+            raw_candidates = [c for c in raw_candidates if c.url not in already_rejected]
+            skipped = before - len(raw_candidates)
+            if skipped:
+                logger.info(f"Skipped {skipped} candidate(s) this agent has already rejected.")
+
         # 2. Hybrid Deduplication. The batch doubles as extra IDF corpus, so
         # terms common across this cycle's candidates count as generic.
         surviving_candidates = []
@@ -100,7 +112,24 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
 
         logger.info(f"{len(surviving_candidates)} novel candidate(s) survived deduplication.")
 
-        if not surviving_candidates:
+        # Keep the feed varied: defer topics that closely echo the previous post.
+        surviving_candidates = HybridRetriever.order_by_topic_spacing(
+            surviving_candidates, agent_id=agent.id, db=db
+        )
+
+        # Occasionally step back and write about a pattern in its own coverage instead
+        # of a new source. Detected deterministically, and None on most cycles. Checked
+        # before the candidate test, since a reflection needs no candidates at all -
+        # a quiet discovery cycle is exactly when looking back is worth doing.
+        trend = detect_coverage_trend(db, agent.id)
+        mode = "reflection" if trend else "topic"
+        if trend:
+            logger.info(
+                f"Running a reflection cycle: {trend.count} of the last "
+                f"{trend.window_size} posts cover related ground."
+            )
+
+        if not surviving_candidates and not trend:
             outcome = "no_novel_candidates"
             logger.info("No novel candidates survived deduplication. Cycle completed with no post.")
         else:
@@ -108,6 +137,11 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
             initial_state = {
                 "persona": persona,
                 "agent_id": agent.id,
+                "mode": mode,
+                "coverage_trend": (
+                    {"titles": trend.titles, "sources": trend.sources,
+                     "window_size": trend.window_size} if trend else None
+                ),
                 "candidates": surviving_candidates,
                 "candidate_idx": 0,
                 "current_candidate": None,

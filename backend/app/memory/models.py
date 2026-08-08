@@ -45,6 +45,9 @@ class PostModel(Base):
     sources_json = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     topic_title = Column(String(512), nullable=True)
+    # "topic" for an ordinary post, "reflection" for one about the agent's own
+    # recent coverage. Used to pace reflections rather than emit them back to back.
+    kind = Column(String(32), nullable=False, default="topic", server_default="topic")
 
     agent = relationship("AgentModel", back_populates="posts")
 
