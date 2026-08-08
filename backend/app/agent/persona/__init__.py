@@ -1,0 +1,1 @@
+"""Persona schema and presets."""
