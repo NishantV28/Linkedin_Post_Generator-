@@ -2,10 +2,11 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import timezone
+from datetime import timedelta, timezone
 
 from backend.app.memory.db import get_db
 from backend.app.memory.models import AgentModel, PostModel, RejectedTopicModel, utc_now
+from backend.app.core.scheduler import calculate_next_delay, start_agent_task
 from backend.app.agent.persona.presets import get_preset_by_name_or_domain
 from backend.app.schemas.agent import (
     InitRequest,
@@ -31,7 +32,7 @@ def format_iso8601(dt) -> str:
 
 
 @router.post("/init", response_model=InitResponse, status_code=status.HTTP_201_CREATED)
-def init_agent(req: InitRequest, db: Session = Depends(get_db)):
+async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     """
     Initialize a persona agent.
     Idempotency guard: If an active agent with the same name and domain exists, returns its agentId.
@@ -55,6 +56,15 @@ def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     ).first()
 
     if existing_agent:
+        # Ensure task is running
+        if existing_agent.next_run_at:
+            scheduled_at = existing_agent.next_run_at
+            if scheduled_at.tzinfo is None:
+                scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+            delay = max(0.0, (scheduled_at - utc_now()).total_seconds())
+        else:
+            delay = 0.0
+        start_agent_task(existing_agent.id, initial_delay_seconds=delay)
         return InitResponse(agentId=existing_agent.id)
 
     # Generate full persona configuration from presets + overrides
@@ -62,18 +72,25 @@ def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     if persona_info.bio:
         persona_config.bio = persona_info.bio
 
+    now = utc_now()
+    cadence = persona_config.posting_cadence_hours
+    first_delay = calculate_next_delay(cadence.min_hours, cadence.max_hours)
     new_agent = AgentModel(
         name=name,
         domain=domain,
         persona_json=persona_config.model_dump_json(),
         active=True,
-        created_at=utc_now(),
+        created_at=now,
+        next_run_at=now + timedelta(seconds=first_delay),
         cycle_count=0
     )
 
     db.add(new_agent)
     db.commit()
     db.refresh(new_agent)
+
+    # Launch autonomous background scheduler task for new agent
+    start_agent_task(new_agent.id, initial_delay_seconds=first_delay)
 
     return InitResponse(agentId=new_agent.id)
 

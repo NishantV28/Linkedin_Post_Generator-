@@ -1,207 +1,158 @@
-# System Walkthrough & Verification Guide
+# Phase 4 Runbook: Autonomous LinkedIn Post Generator
 
-This document provides a complete, step-by-step guide to configure, run, and manually verify **Phase 1 (Foundations & Contracts)**, **Phase 2 (Discovery & Memory Layer)**, and **Phase 3 (LangGraph Agentic Core — Editorial Judgment & Voice)** of the Autonomous AI Persona Agent project.
+This guide starts the complete system from an empty local setup. After initialization, the scheduler discovers live topics, evaluates them, and writes approved posts to the feed without another API request.
 
----
+## 1. What you need before starting
 
-## 1. Environment Configuration (`.env`)
+The system uses live data first and an LLM second. Configure the keys in this order:
 
-Before running any script or starting the backend server, copy `.env.example` to `.env` in the project root:
+| Step | Service | Is a key required? | Why it is used |
+|---|---|---:|---|
+| 1 | Hacker News Algolia | No | Live Hacker News stories. |
+| 2 | arXiv API | No | Recent research papers. |
+| 3 | GitHub Search API | No for local use | Recently updated repositories. Anonymous requests have a low rate limit; a GitHub token is not currently wired into this project. |
+| 4 | Tavily | Optional, recommended | Better live web results. Without it, the app tries DuckDuckGo. |
+| 5 | Groq **or** OpenAI | **Yes — choose one** | Editorial judging, post writing, and QA. No post can be generated without an LLM key. |
+| 6 | Hugging Face model download | No token normally | On the first run, `sentence-transformers` downloads the local embedding model used for memory and duplicate detection. Internet access is required for that initial download. |
 
-```bash
-cp .env.example .env
+The minimum usable configuration is one LLM key. Groq is a good default for fast, low-cost local testing. Tavily improves discovery but is not mandatory.
+
+## 2. Create the local environment
+
+Run these commands in PowerShell from the repository root:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -m pip install --upgrade pip
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### Environment Variables Breakdown
+If PowerShell blocks virtual-environment activation, run this once for the current terminal and retry:
 
-| Variable | Required for Phase 1 & 2? | Required for Phase 3? | Description | Example / Default |
-| :--- | :---: | :---: | :--- | :--- |
-| `GROQ_API_KEY` | ⚠️ OPTIONAL | ⚡ **RECOMMENDED** | Groq API key (`gsk_...`) for ultra-fast LLM inference (`llama-3.3-70b-versatile`) | `gsk_your_groq_key_here` |
-| `OPENAI_API_KEY` | ⚠️ OPTIONAL | 🔴 **REQUIRED (if no Groq key)** | OpenAI API key (`sk-...`) for GPT model execution (`gpt-4o-mini`) | `sk-your_openai_key_here` |
-| `LLM_MODEL` | ⚠️ OPTIONAL | ⚠️ OPTIONAL | LLM Model name override (defaults to `llama-3.3-70b-versatile` for Groq, `gpt-4o-mini` for OpenAI) | `llama-3.3-70b-versatile` |
-| `TAVILY_API_KEY` | ⚠️ OPTIONAL | ⚠️ OPTIONAL | Tavily live web search key. Automatically falls back to DuckDuckGo if missing | `your_tavily_api_key_here` |
-| `DATABASE_URL` | **YES** | **YES** | SQLite database file connection string | `sqlite:///./post_generator.db` |
-| `ENVIRONMENT` | **YES** | **YES** | Mode (`development` / `production`) | `development` |
-| `LOG_LEVEL` | **YES** | **YES** | Logging severity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` |
-| `HOST` | **YES** | **YES** | Host IP binding for FastAPI uvicorn server | `0.0.0.0` |
-| `PORT` | **YES** | **YES** | HTTP server port | `8000` |
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
 
----
+## 3. Configure `.env`
 
-## 2. Phase 1, Phase 2 & Phase 3 Architecture Summary
-
-All three phases are fully built and verified according to the master plan ([implementation.md](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/implementation.md)):
-
-### Phase 1 — Foundations & Contracts Status: **COMPLETE**
-- **Scaffolding & Models**: FastAPI app ([backend/app/main.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/main.py)), Pydantic settings ([backend/app/core/config.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/core/config.py)), SQLAlchemy models ([backend/app/memory/models.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/memory/models.py)).
-- **Persona Schemas & Presets**: Data models in [backend/app/agent/persona/schema.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/schema.py) and presets for "Distill" and "Ada" in [backend/app/agent/persona/presets.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/persona/presets.py).
-- **REST Endpoints**: Evaluator-facing routes in [backend/app/api/routes.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/api/routes.py) (`/init`, `/feed`, `/status`, `/rejected`, `/health`).
-
-### Phase 2 — Discovery & Memory Layer Status: **COMPLETE**
-- **Candidate Discovery**: Hacker News, arXiv XML, GitHub Trending, and Web Search integrated in [backend/app/agent/tools/](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/tools/).
-- **Hybrid Memory & Deduplication**: Local HuggingFace embeddings (`all-MiniLM-L6-v2`), ChromaDB persistent vector database (`./chroma_data`), BM25 lexical index with stopword filtering (`sparse_index.py`), and RRF rank fusion deduplication engine (`hybrid_retriever.py`).
-
-### Phase 3 — LangGraph Agentic Core Status: **COMPLETE**
-- **LLM Factory**: Multi-provider client in [backend/app/agent/llm.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/llm.py) supporting **Groq API** (`GROQ_API_KEY`) and **OpenAI API** (`OPENAI_API_KEY`).
-- **Graph State & Nodes**:
-  - `editorial_judge.py`: Evaluates topics against relevance, novelty, credibility, and timeliness thresholds.
-  - `writer.py`: Generates persona-voiced posts using few-shot past post style context retrieved via `HybridRetriever`.
-  - `qa_judge.py`: Verifies post tone, checks forbidden phrases, and validates factual grounding against candidate summaries.
-  - `publish.py`: Persists accepted posts into SQLite relational memory and ChromaDB vector memory.
-  - `rejection_logger.py`: Logs full audit scoring breakdowns for rejected topics into `rejected_topics` table.
-- **Graph Compilation**: LangGraph state graph in [backend/app/agent/graph.py](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/Linkedin_Post_Generator-/backend/app/agent/graph.py) with dynamic conditional routing.
-
----
-
-## 3. Step-by-Step Manual Execution & Verification Guide
-
-Follow these steps from scratch to manually test every phase.
-
----
-
-### Step 1: Configure Your API Key in `.env`
-
-Add your Groq API key or OpenAI API key to `.env`:
+Open `.env` and set exactly one LLM provider key. Do not leave placeholder values in place.
 
 ```env
-# Add Groq API Key (Recommended)
-GROQ_API_KEY=gsk_your_groq_api_key_here
+# Option A: recommended for local testing
+GROQ_API_KEY=gsk_your_real_key
+LLM_MODEL=llama-3.3-70b-versatile
 
-# OR Add OpenAI API Key
-# OPENAI_API_KEY=sk-your_openai_api_key_here
+# Option B: use this instead of GROQ_API_KEY
+# OPENAI_API_KEY=sk-your_real_key
+# LLM_MODEL=gpt-4o-mini
+
+# Optional but recommended for broader web discovery
+TAVILY_API_KEY=tvly-your_real_key
+
+# Normal autonomous cadence and 48-hour safety cap
+CADENCE_MIN_HOURS=2.0
+CADENCE_MAX_HOURS=5.0
+MAX_POSTS_48H=16
 ```
 
----
+Keep `DATABASE_URL=sqlite:///./post_generator.db` unless you deliberately want the local database elsewhere. The SQLite database and `chroma_data` directory are persistent memory; do not delete them if you want the agent to remember prior posts after restarting.
 
-### Step 2: Run Phase 3 LangGraph Cycle Test Harness (Live LLM Generation)
+## 4. Start the API
 
-Execute the Phase 3 test harness to discover live candidates, run deduplication, pass candidates through the Editorial Judge LLM, generate drafts with the Post Writer LLM, verify with the QA Judge LLM, and persist published posts:
-
-```bash
-python scripts/test_cycle.py
-```
-
-#### Expected Output
-```text
-===========================================================================
-       AUTONOMOUS AI PERSONA AGENT — PHASE 3 LANGGRAPH CORE HARNESS
-===========================================================================
-Using Provider: Groq API | Model: llama-3.3-70b-versatile
-Loaded existing agent 'Distill' (ID: 3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2)
-
-1. DISCOVERING LIVE CANDIDATES FOR PERSONA 'Distill'...
----> Total Raw Candidates Discovered: 15
-
-2. DEDUPLICATING CANDIDATES AGAINST PAST MEMORY...
----> Novel Candidates Ready for Editorial Evaluation: 14
-
-3. EXECUTING LANGGRAPH AGENT CORE (EDITORIAL JUDGE -> WRITER -> QA JUDGE -> PUBLISH)...
-2026-08-08 12:45:00 - INFO - Starting cycle with 14 candidate(s). Target [0]: 'Scalable MatMul-free Language Modeling...'
-2026-08-08 12:45:02 - INFO - Editorial Judge Verdict for 'Scalable MatMul-free Language Modeling...': PASS (Rel=9, Nov=9, Cred=9)
-2026-08-08 12:45:05 - INFO - Writer node generated draft for 'Scalable MatMul-free Language Modeling...' (420 chars)
-2026-08-08 12:45:06 - INFO - QA Judge Verdict: PASS (Voice=True, Grounded=True, NonRep=True)
-2026-08-08 12:45:07 - INFO - SUCCESS: Published post 'post_a1b2c3d4' for agent '3a8c2f1e' to SQLite + ChromaDB.
-
-===========================================================================
-                          CYCLE EXECUTION SUMMARY
-===========================================================================
-  Cycle Outcome          : PUBLISHED
-  Candidates Processed   : 1
-  Topics Rejected        : 0
-
----------------------------------------------------------------------------
-                       PUBLISHED POST IN FEED
----------------------------------------------------------------------------
-POST ID    : post_a1b2c3d4
-TITLE      : Scalable MatMul-free Language Modeling
-CREATED AT : 2026-08-08 12:45:07
-SOURCES    : ['https://arxiv.org/abs/2406.02528']
-
-POST TEXT  :
-Matrix multiplication has dominated neural network architectures for decades.
-But a new paper proves we can train billion-parameter language models completely
-MatMul-free without sacrificing performance...
-
-PUBLISHING RATIONALE :
-Selection Rationale: Selected because removing MatMul hardware constraints is a major architectural breakthrough for efficient inference.
-Why Now: Timely research published on arXiv today.
----------------------------------------------------------------------------
-```
-
----
-
-### Step 3: Verify the Live Feed API
-
-Start the FastAPI backend server:
-
-```bash
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-In a separate terminal, fetch the published post feed for your agent:
-
-#### PowerShell:
 ```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/agent/feed?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2" -Method Get
+py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-#### bash / cURL:
-```bash
-curl -X GET "http://127.0.0.1:8000/api/agent/feed?agentId=3a8c2f1e-91d4-48b2-b3e1-7d12f9e408a2"
+In another PowerShell window, confirm it is healthy:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-#### Expected JSON Output:
+Expected response:
+
 ```json
-{
-  "posts": [
-    {
-      "id": "post_a1b2c3d4",
-      "createdAt": "2026-08-08T12:45:07Z",
-      "text": "Matrix multiplication has dominated neural network architectures for decades...",
-      "rationale": "Selection Rationale: Selected because removing MatMul hardware constraints...\nWhy Now: Timely research published on arXiv today.",
-      "sources": [
-        "https://arxiv.org/abs/2406.02528"
-      ]
-    }
-  ]
-}
+{"status":"ok","environment":"development"}
 ```
 
----
+## 5. Start an autonomous agent (the only required API call)
 
-### Step 4: Run the Standalone Phase 2 Discovery Harness
+Create an agent once. This persists its persona and its first scheduled run timestamp, then starts a background scheduler task.
 
-```bash
-python scripts/test_discovery.py
+```powershell
+$body = @{ persona = @{ name = "Distill"; domain = "AI Research" } } | ConvertTo-Json
+$init = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/agent/init -ContentType "application/json" -Body $body
+$agentId = $init.agentId
+$agentId
 ```
 
----
+Save the returned UUID. Calling `/init` again with the same name and domain returns the same active agent instead of creating a duplicate scheduler.
 
-### Step 5: Run Full Automated Pytest Test Suite
+The normal first cycle runs after a random delay between `CADENCE_MIN_HOURS` and `CADENCE_MAX_HOURS`. That is intentional: it prevents synchronized posting and is persisted in SQLite. Inspect it with:
 
-Execute pytest across all three phases:
-
-```bash
-python -m pytest backend/tests/ -v
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/agent/status?agentId=$agentId"
 ```
 
-#### Expected Output
+## 6. Observe the autonomous cycle
+
+When the scheduled time arrives, the agent performs this flow automatically:
+
 ```text
-============================= test session starts =============================
-backend/tests/test_phase1.py::test_health_check PASSED                  [ 10%]
-backend/tests/test_phase1.py::test_init_agent_success PASSED            [ 20%]
-backend/tests/test_phase1.py::test_init_agent_idempotency PASSED          [ 30%]
-backend/tests/test_phase1.py::test_get_feed_empty PASSED                [ 40%]
-backend/tests/test_phase1.py::test_get_feed_with_seeded_posts PASSED    [ 50%]
-backend/tests/test_phase1.py::test_get_status_and_rejected PASSED       [ 60%]
-backend/tests/test_phase2.py::test_embeddings_generation PASSED         [ 70%]
-backend/tests/test_phase2.py::test_vector_store_operations PASSED       [ 80%]
-backend/tests/test_phase2.py::test_sparse_bm25_indexing PASSED          [ 90%]
-backend/tests/test_phase2.py::test_rrf_fusion_logic PASSED               [ 95%]
-backend/tests/test_phase2.py::test_hybrid_deduplication PASSED           [ 97%]
-backend/tests/test_phase3.py::test_editorial_judge_node_pass PASSED     [ 98%]
-backend/tests/test_phase3.py::test_writer_node_generation PASSED        [ 99%]
-backend/tests/test_phase3.py::test_qa_judge_node_eval PASSED            [100%]
-
-============================= 14 passed in 8.15s ==============================
+live sources → hybrid duplicate check → editorial judge → writer → QA → SQLite + Chroma → feed
 ```
+
+Use these read-only endpoints while it runs:
+
+```powershell
+# Current scheduler state and next scheduled time
+Invoke-RestMethod "http://127.0.0.1:8000/api/agent/status?agentId=$agentId"
+
+# Approved posts, newest first
+Invoke-RestMethod "http://127.0.0.1:8000/api/agent/feed?agentId=$agentId"
+
+# Topics declined by editorial or QA checks
+Invoke-RestMethod "http://127.0.0.1:8000/api/agent/rejected?agentId=$agentId"
+```
+
+`/feed` never triggers discovery or an LLM call; it only reads persisted posts. A published item contains its post text, selection/why-now rationale, and source URLs.
+
+## 7. Fast local Phase 4 verification
+
+Do not change your production cadence just to test scheduling. The included harness creates/uses a test agent with a 3.6–7.2 second cadence, runs for about 15 seconds, and reports cycle, post, and audit counts.
+
+```powershell
+py scripts/test_scheduler.py
+```
+
+It still needs the same LLM key and internet access because it runs real discovery and real editorial generation. Stop it with `Ctrl+C` after reviewing its summary.
+
+For unit and integration checks, run:
+
+```powershell
+py -m pytest backend/tests -v
+```
+
+## 8. Restart behavior and limits
+
+Stop the server with `Ctrl+C`, then start it again using the command in section 4. At startup the app finds all active agents and re-arms each one using its persisted `next_run_at`; it does not restart the cadence from zero.
+
+An agent deactivates automatically when either condition is reached:
+
+- 48 hours have elapsed since it was initialized.
+- It has published `MAX_POSTS_48H` posts. Rejected/no-candidate cycles do not consume this post budget.
+
+To begin a truly fresh demo, use a different persona name/domain. Existing SQLite and Chroma memory intentionally prevents repeat topic selection for an existing agent.
+
+## 9. Docker option
+
+After configuring `.env`, build and run the backend with persistent local storage mounted into the container:
+
+```powershell
+docker build -t linkedin-post-generator .
+docker run --rm -p 8000:8000 --env-file .env -v "${PWD}\post_generator.db:/app/post_generator.db" -v "${PWD}\chroma_data:/app/chroma_data" linkedin-post-generator
+```
+
+Use the same `/health`, `/init`, `/status`, `/feed`, and `/rejected` commands above. For a 48-hour run, deploy it only to an always-on host with persistent storage; a serverless or sleeping service cannot keep the autonomous scheduler alive.

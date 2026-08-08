@@ -15,14 +15,19 @@ logging.basicConfig(
 logger = logging.getLogger("autonomous_agent")
 
 
+from backend.app.core.scheduler import rearm_active_agents, stop_all_agent_tasks
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan event handler for startup and shutdown."""
     logger.info("Initializing SQLite database tables...")
     init_db()
     logger.info("Database initialization complete.")
+    logger.info("Re-arming autonomous background scheduler tasks...")
+    rearm_active_agents()
     yield
     logger.info("Application shutting down.")
+    await stop_all_agent_tasks()
 
 
 app = FastAPI(

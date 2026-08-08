@@ -1,4 +1,6 @@
+import json
 import uuid
+from typing import Any, Dict
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
@@ -26,6 +28,11 @@ class AgentModel(Base):
     posts = relationship("PostModel", back_populates="agent", cascade="all, delete-orphan")
     rejected_topics = relationship("RejectedTopicModel", back_populates="agent", cascade="all, delete-orphan")
     cycle_runs = relationship("CycleRunModel", back_populates="agent", cascade="all, delete-orphan")
+
+    @staticmethod
+    def get_persona(agent: "AgentModel") -> Dict[str, Any]:
+        """Deserialize the immutable persona payload stored with an agent."""
+        return json.loads(agent.persona_json)
 
 
 class PostModel(Base):

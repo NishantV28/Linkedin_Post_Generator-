@@ -13,26 +13,28 @@ An autonomous publishing agent that digests AI research publications (from Hacke
 - `requirements.txt`: Python package dependencies.
 - `.env.example`: Configuration template for API keys and DB paths.
 - `Dockerfile`: Production deployment Docker image specification.
-- `walkthrough.md`: Detailed documentation on validating Phase 1.
+- `walkthrough.md`: Complete Phase 4 setup, API-key, scheduling, restart, and verification guide.
 
 ---
 
 ## Quick Start
 
 ### 1. Setup Environment
-```bash
-pip install -r requirements.txt
-cp .env.example .env
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
 ### 2. Start the FastAPI Service
-```bash
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```powershell
+py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### 3. Run Integration Tests
-```bash
-python -m pytest backend/tests/test_phase1.py
+```powershell
+py -m pytest backend/tests -v
 ```
 
-For more detailed API validation steps, refer to [walkthrough.md](file:///c:/Users/Nishant%20Varshney/OneDrive/Desktop/post_generator/walkthrough.md).
+For exact live-data/API-key setup and the autonomous Phase 4 walkthrough, see [walkthrough.md](walkthrough.md).
