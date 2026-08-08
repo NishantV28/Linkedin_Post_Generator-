@@ -16,6 +16,11 @@ venv/
 ENV/
 env/
 
+# Frontend build dependencies and output
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
 # IDEs and editors
 .vscode/
 .idea/

@@ -10,6 +10,7 @@ An autonomous publishing agent that digests AI research publications (from Hacke
 
 - `backend/app/`: FastAPI application containing API routes, core settings, memory schema, and presets.
 - `backend/tests/`: Integration tests to verify API endpoints and contracts.
+- `frontend/`: Vite + React dashboard for initializing an agent and viewing its live feed, schedule, rationale, and rejected topics.
 - `requirements.txt`: Python package dependencies.
 - `.env.example`: Configuration template for API keys and DB paths.
 - `Dockerfile`: Production deployment Docker image specification.
@@ -38,3 +39,15 @@ py -m pytest backend/tests -v
 ```
 
 For exact live-data/API-key setup and the autonomous Phase 4 walkthrough, see [walkthrough.md](walkthrough.md).
+
+### 4. Start the React dashboard
+
+In a second terminal, after the backend is running:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite (normally `http://127.0.0.1:5173`). The dashboard calls the backend at `http://127.0.0.1:8000` by default. For a different backend address, create `frontend/.env.local` with `VITE_API_BASE=https://your-api.example.com` and restart Vite.

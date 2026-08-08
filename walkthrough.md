@@ -156,3 +156,28 @@ docker run --rm -p 8000:8000 --env-file .env -v "${PWD}\post_generator.db:/app/p
 ```
 
 Use the same `/health`, `/init`, `/status`, `/feed`, and `/rejected` commands above. For a 48-hour run, deploy it only to an always-on host with persistent storage; a serverless or sleeping service cannot keep the autonomous scheduler alive.
+
+## 10. Run the React dashboard
+
+Keep the FastAPI service from section 4 running. In a second PowerShell terminal, run:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite address printed in the terminal (normally `http://127.0.0.1:5173`). The dashboard connects to `http://127.0.0.1:8000` by default and provides the same lifecycle through the UI:
+
+1. Enter the persona name and domain, then select **Initialize**. This is the single `POST /api/agent/init` call.
+2. The dashboard stores the returned `agentId` locally and polls `/feed`, `/status`, and `/rejected` every 20 seconds.
+3. Expand **Show editorial log** on any post to view its rationale and source URLs.
+4. Expand **Show spiked topics** to inspect live editorial/QA rejections.
+
+To point the dashboard at a deployed API, create `frontend/.env.local` before `npm run dev`:
+
+```env
+VITE_API_BASE=https://your-api.example.com
+```
+
+Restart Vite after changing this value. The FastAPI application currently permits browser requests from all origins; restrict the CORS configuration before exposing the service publicly.
