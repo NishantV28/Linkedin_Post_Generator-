@@ -35,6 +35,12 @@ Start at [Suggested order](#suggested-order) for the working sequence.
 | P0-3 | Dedup dropped unrelated topics | **Done** | `memory/hybrid_retriever.py`, `memory/sparse_index.py`, `core/scheduler.py`, `scripts/test_discovery.py` |
 | P2-7 | Missing `get_rejected_topics` crashed the harness | **Done** | `memory/repository.py` |
 | P2-8 | Console encoding crash hid post text | **Done** | `scripts/*.py` |
+| P1-2 | Persona doc never reached the model | **Done** | `persona/schema.py`, `persona/presets.py`, `persona/voice.py`, `prompts/writer.py`, `prompts/qa_judge.py`, `nodes/writer.py`, `nodes/qa_judge.py` |
+| P0-5 | **arXiv returned zero candidates all along** | **Done** | `tools/arxiv.py` |
+| P0-6 | `.env` cadence was dead config | **Done** | `core/config.py`, `core/scheduler.py`, `api/routes.py` |
+| P1-1 | Editorial thresholds never enforced | **Done** | `nodes/editorial_judge.py`, `prompts/editorial_judge.py` |
+| P1-3 | Memory never read by the judges | **Done** | `nodes/editorial_judge.py`, `nodes/qa_judge.py` |
+| — | Frontend collapsed the persona's closing line | **Done** | `frontend/src/styles.css` |
 
 All 17 existing tests pass after these changes.
 
@@ -197,7 +203,38 @@ The closer item is novel and the farther one is a duplicate. Only the rare-term 
 
 ---
 
-### P0-4. Stale content published as news
+### P0-5. arXiv returned zero candidates all along ✅ DONE
+
+**The most consequential defect found so far.** Distill is an AI-research persona whose primary source is arXiv. [arxiv.py](backend/app/agent/tools/arxiv.py) requested `http://export.arxiv.org/api/query`; arXiv answers plain HTTP with a **301 redirect to https**, and `httpx` does not follow redirects by default. The response body was empty, `status_code != 200` logged a warning nobody read, and the function returned `[]`.
+
+**Every post the agent had ever written came from Hacker News headlines, GitHub repo blurbs, or scraped web results.** Not one came from a paper.
+
+This also explains why almost nothing cleared the editorial bar once thresholds were enforced ([P1-1](#p1-1-editorial-thresholds-are-never-enforced-in-code--done)): a pool of Ask HN threads and 59-star repos genuinely cannot reach Distill's `credibility >= 8.0`. The judge was right; the pool was empty of anything worth publishing.
+
+- [x] `https://` scheme, plus `follow_redirects=True` as belt and braces
+
+**Result:** 5 arXiv candidates per cycle, published within the last 2 days, each with a ~500-character abstract — which also fixes the thin-summary problem for the highest-quality candidates. The very next cycle published a genuine paper.
+
+---
+
+### P0-6. `.env` cadence was dead config ✅ DONE
+
+`POST /api/agent/init` scheduled from `persona_config.posting_cadence_hours` (2.5-4.5 h for Distill). `CADENCE_MIN_HOURS` / `CADENCE_MAX_HOURS` were only a `.get()` fallback in the scheduler loop — and since `persona_json` always contains a cadence, **the fallback could never fire**. The env vars did nothing, while [walkthrough.md](walkthrough.md) instructed users to set them.
+
+Rather than editing the preset (cadence is part of the persona's identity — the persona doc specifies "roughly every 3 hours"), added an explicit override with defined precedence:
+
+**env override → persona cadence → global fallback**
+
+- [x] `CADENCE_OVERRIDE_MIN_HOURS` / `CADENCE_OVERRIDE_MAX_HOURS` in config
+- [x] `resolve_cadence()` in `scheduler.py`, used by both `/init` and the loop
+- [x] All three precedence paths verified
+- [ ] Update [walkthrough.md](walkthrough.md) §3 and §7, which still document the old dead behaviour
+
+> **Before the real 48h run, comment out both `CADENCE_OVERRIDE_*` lines.** Distill then posts on its own 2.5-4.5 h rhythm with no other change.
+
+---
+
+### P0-4. Stale content published as news — *largely resolved by [P1-1](#p1-1-editorial-thresholds-are-never-enforced-in-code--done)*
 
 **Confirmed live.** The published post covers `arXiv:2309.10305` (Baichuan 2) — a **September 2023** paper — and its rationale claims *"Baichuan 2 arrives while reproducibility and independent evaluation are hot concerns, making its release timely."* Presenting a three-year-old paper as current news is immediately visible to a judge.
 
@@ -215,7 +252,7 @@ The closer item is novel and the farther one is a duplicate. Only the rare-term 
 
 ## P1 — Directly costs judging points
 
-### P1-1. Editorial thresholds are never enforced in code
+### P1-1. Editorial thresholds are never enforced in code ✅ DONE
 
 **Location.** [editorial_judge.py](backend/app/agent/nodes/editorial_judge.py), [prompts/editorial_judge.py:20](backend/app/agent/prompts/editorial_judge.py#L20)
 
@@ -230,14 +267,18 @@ passes = (verdict.relevance >= t.min_relevance and verdict.novelty >= t.min_nove
 verdict.decision = "pass" if passes else "reject"
 ```
 
-Add `min_timeliness` to the prompt too, so the model reasons about it rather than being overridden after the fact.
+**Fix applied.**
 
-- [ ] Programmatic threshold gate
-- [ ] Add timeliness to the decision rule in the prompt
+- [x] **Programmatic gate** in `editorial_judge_node`: all four scores are checked against the persona's thresholds, and a model `pass` below the bar is overruled. The reason string records which dimension failed, e.g. *"[Below Distill's publishing bar: timeliness 3 < 6.5.]"*
+- [x] **`min_timeliness` added to the prompt**, with instructions to judge against the publication date rather than how modern the subject sounds — plus a note that scores are checked programmatically, so inflating them to force a decision achieves nothing.
+
+**Verified** with 4 parametrised tests covering: all-clear passes, stale content, weak source, and off-topic — each asserting an approving model verdict is overruled when a threshold fails.
+
+**Effect on stale content** (this is [P0-4](#p0-4-stale-content-published-as-news--largely-resolved-by-p1-1) in practice): the September 2023 Baichuan paper, previously *published as news*, now scores `Time=3` and is rejected automatically. Across a live cycle, most stale HN items were rejected on timeliness alone.
 
 ---
 
-### P1-2. The persona doc never reaches the model
+### P1-2. The persona doc never reaches the model ✅ DONE
 
 This is the biggest gap between what was designed and what the judges read.
 
@@ -257,15 +298,33 @@ The output has no obvious-claim setup, no contrarian turn, no "what does this ac
 - The 4-part structure, the worked example, and the core question ("what does this paper actually change?") are absent
 - `stable_interests` is not passed
 
-**Fix.**
-- [ ] Rewrite `WRITER_SYSTEM_PROMPT` around the persona doc: core question, 4-part structure, the worked example as a few-shot anchor
-- [ ] Pass `signature_tell` and `stable_interests` into the prompt
-- [ ] Drop "thought leader" framing entirely
-- [ ] Add a programmatic check that the draft ends with a separated takeaway line, mirroring the forbidden-phrase check in [qa_judge.py:48-54](backend/app/agent/nodes/qa_judge.py#L48-L54)
+**Fix applied.** The persona doc now drives the code instead of sitting beside it.
+
+- [x] **Structure moved into the persona schema, not the prompt template.** `VoiceGuidelines` gained `core_question`, `post_structure`, `worked_example` and `requires_standalone_closing_line`. Hardcoding Distill's beats into the shared template would have broken Ada; both presets now carry their own, taken verbatim from [persona-distill.md](persona-distill.md).
+- [x] **`WRITER_SYSTEM_PROMPT` rewritten** around the core question, the ordered beats, and the worked example. "Thought leader" framing removed — it was the exact register the persona is defined against.
+- [x] **`signature_tell` and `stable_interests` now passed** — `signature_tell` was populated in both presets and referenced nowhere in the codebase.
+- [x] **Explicit anti-filler rules** derived from observed failures: no narrating the reading process ("Just saw…"), no call to action, no "what the community needs", no sentence that would be equally true of a different paper.
+- [x] **QA judge given the same standards** — it previously checked only tone and forbidden words, so `voice_consistent` could not detect a structural failure.
+- [x] **Programmatic structure check** in `qa_judge_node`, overriding the LLM verdict, alongside the existing forbidden-phrase check.
+
+> **Deterministic formatting is repaired, not re-prompted.** The first live run after this change produced **0 posts / 22 rejections**. Diagnosis: the writing was already correct — all four beats, a real takeaway — but the closing line was separated by `\n` instead of `\n\n`, so the structure check failed and burned both revision rounds on a formatting slip.
+>
+> Rather than relaxing the check or hoping the model complies, `ensure_closing_line_separation` in the new [persona/voice.py](backend/app/agent/persona/voice.py) promotes a short trailing line into its own block before QA sees it. It only fires when the final line is already short enough to be a takeaway — a long rambling final paragraph is a genuine structural failure and still fails QA. The prompt also now states the blank-line requirement explicitly.
+
+**Result** — same topic, before and after:
+
+| | Post text |
+|---|---|
+| **Before** | "Just saw a Hacker News post about a new QCMP framework… No hype here—just a concrete methodological proposal. If you work on agent robustness, worth a skim. The community needs more work on this front, and QCMP adds a fresh perspective." |
+| **After** | "The paper claims to make AI agents more robust.<br>But the interesting part isn't the robustness claim itself.<br>It introduces a QCMP framework that treats poisoning as a design constraint and builds resistance directly into the agent's training and inference pipeline.<br><br>*QCMP reframes poison resistance as a built-in system property.*" |
+
+Live cycle: 1 published / 7 rejected. Tests: 18 passing, including a new one asserting that a structure violation overrides an approving LLM verdict.
+
+**Still open from this area** (tracked in [A-1](#a-1-persona-consistency-weakest-area-highest-scoring-impact)): the style-drift guard.
 
 ---
 
-### P1-3. Memory is written but never read by the judges
+### P1-3. Memory is written but never read by the judges ✅ DONE (judges)
 
 `recent_post_titles` in [editorial_judge.py:47](backend/app/agent/nodes/editorial_judge.py#L47) and `recent_posts` in [qa_judge.py:39](backend/app/agent/nodes/qa_judge.py#L39) are both hardcoded to `"None in memory."`
 
@@ -273,10 +332,11 @@ So the QA `non_repetitive` check is a no-op and the editorial judge has zero ant
 
 This is the single biggest gap against the "effective use of memory" criterion — the plumbing is built, just not connected.
 
-- [ ] Wire `get_recent_posts` into the editorial judge prompt
-- [ ] Wire recent post texts into the QA prompt
-- [ ] Add callbacks: instruct the writer to occasionally reference a retrieved past post (the retrieval already happens in [writer.py:33-38](backend/app/agent/nodes/writer.py#L33-L38))
-- [ ] Add self-noticing: after N posts, let the persona comment on its own coverage trend
+- [x] **`get_recent_posts` wired into the editorial judge** — last 8 published titles, with an explicit instruction to reject anything covering the same ground under a different headline. Catches repeats the embeddings miss.
+- [x] **Recent post bodies wired into the QA judge** — the `non_repetitive` check now has something to compare against instead of the literal string `"None in memory."`
+- [x] Both loaders fail soft: a memory error logs and degrades, it never blocks judging
+- [ ] Add callbacks: instruct the writer to occasionally reference a retrieved past post (the retrieval already happens in [writer.py](backend/app/agent/nodes/writer.py)) — tracked in [A-2](#a-2-memory-that-changes-decisions-not-just-dedup)
+- [ ] Add self-noticing: after N posts, let the persona comment on its own coverage trend — tracked in [A-2](#a-2-memory-that-changes-decisions-not-just-dedup)
 
 ---
 
@@ -400,8 +460,9 @@ Editorial judgment, the autonomy loop with restart re-arm, the rejection audit t
 
 Judging criterion: **consistency of the AI persona**.
 
-- [ ] Rewrite the writer prompt around the 4-part structure and worked example ([P1-2](#p1-2-the-persona-doc-never-reaches-the-model))
-- [ ] Pass `signature_tell` — populated in both presets, referenced nowhere in the codebase
+- [x] Rewrite the writer prompt around the 4-part structure and worked example ([P1-2](#p1-2-the-persona-doc-never-reaches-the-model--done))
+- [x] Pass `signature_tell` — was populated in both presets and referenced nowhere
+- [x] Programmatic closing-line check, overriding the LLM verdict
 - [ ] **Style-drift guard**: embed each new post, compare against the centroid of prior posts, trigger a revision if it drifts beyond a threshold. Makes consistency *measurable* instead of hoped-for, and reuses the embedding infrastructure already present.
 - [ ] Programmatic check that the draft closes with a separated takeaway line, mirroring the existing forbidden-phrase check in [qa_judge.py:48-54](backend/app/agent/nodes/qa_judge.py#L48-L54)
 
@@ -456,9 +517,10 @@ Judging criterion: **autonomous operation after initialization**.
 | ✅ | ~~**P0-3** dedup threshold~~ | done — was stalling the feed over time |
 | ✅ | ~~**P2-7** + **P2-8**~~ | done — a full cycle now runs and prints end-to-end |
 | **1** | **S0-1** AI Usage Log | Removes a disqualification risk for ~30 min of work. Outranks everything else — quality is irrelevant if the submission is never scored. |
-| **2** | **P1-2** writer prompt (→ A-1) | Biggest visible quality gap. Every judge reads the feed; this is the weakest scoring area despite being the best-designed asset. |
-| **3** | **P1-1** + **P1-3** | Two full rubric criteria, small edits |
-| **4** | **P1-4** + **P1-6** + grounded why-now (A-3) | Transparency criterion |
+| ✅ | ~~**P1-2** writer prompt~~ | done — the persona doc now drives the writer and QA judge |
+| ✅ | ~~**P1-1** + **P1-3**~~ | done — thresholds enforced, memory wired into both judges |
+| ✅ | ~~**P0-5** arXiv~~ | done — found while diagnosing an empty feed; the single most consequential defect |
+| **4** | **P1-6** + **P1-4** | ← *next*. P1-6 has now blocked diagnosis twice and is visible in the demo UI |
 | **5** | **P0-4** recency filter | Stops stale content being published as news |
 | **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
 | **7** | **S0-2** deploy + **A-6** startup self-check | Stage 1 requirement; needs soak time before the real run |

@@ -6,7 +6,7 @@ from datetime import timedelta, timezone
 
 from backend.app.memory.db import get_db
 from backend.app.memory.models import AgentModel, PostModel, RejectedTopicModel, utc_now
-from backend.app.core.scheduler import calculate_next_delay, start_agent_task
+from backend.app.core.scheduler import calculate_next_delay, resolve_cadence, start_agent_task
 from backend.app.agent.persona.presets import get_preset_by_name_or_domain
 from backend.app.schemas.agent import (
     InitRequest,
@@ -74,7 +74,8 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
 
     now = utc_now()
     cadence = persona_config.posting_cadence_hours
-    first_delay = calculate_next_delay(cadence.min_hours, cadence.max_hours)
+    min_h, max_h = resolve_cadence(cadence.min_hours, cadence.max_hours)
+    first_delay = calculate_next_delay(min_h, max_h)
     new_agent = AgentModel(
         name=name,
         domain=domain,

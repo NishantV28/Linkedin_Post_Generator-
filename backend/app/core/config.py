@@ -22,9 +22,16 @@ class Settings(BaseSettings):
     LLM_MODEL: Optional[str] = None  # e.g., 'llama-3.3-70b-versatile' for Groq or 'gpt-4o-mini' for OpenAI
     LLM_BASE_URL: Optional[str] = None
     
-    # Posting Cadence Bounds (hours)
+    # Posting cadence fallback, used only when a persona defines no cadence of its own.
     CADENCE_MIN_HOURS: float = 2.0
     CADENCE_MAX_HOURS: float = 5.0
+
+    # Demo/test override. When both are set they win over the persona's cadence
+    # everywhere, so a full autonomous loop can be observed in minutes instead of
+    # hours. Leave unset for real runs - cadence is part of the persona's identity.
+    CADENCE_OVERRIDE_MIN_HOURS: Optional[float] = None
+    CADENCE_OVERRIDE_MAX_HOURS: Optional[float] = None
+
     MAX_POSTS_48H: int = 16
     
     model_config = SettingsConfigDict(

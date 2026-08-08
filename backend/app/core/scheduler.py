@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
@@ -27,6 +27,25 @@ def calculate_next_delay(min_hours: float, max_hours: float) -> float:
     """Calculate random jittered delay in seconds between min and max hours."""
     hours = random.uniform(min_hours, max_hours)
     return hours * 3600.0
+
+
+def resolve_cadence(persona_min: Optional[float], persona_max: Optional[float]) -> Tuple[float, float]:
+    """
+    Decide the cadence bounds actually used for scheduling.
+
+    Precedence: explicit env override (demos/tests) > the persona's own cadence >
+    global fallback. The persona's cadence is part of its identity, so it wins over
+    the fallback - but an operator running a demo needs a way to compress it.
+    """
+    override_min = settings.CADENCE_OVERRIDE_MIN_HOURS
+    override_max = settings.CADENCE_OVERRIDE_MAX_HOURS
+    if override_min is not None and override_max is not None:
+        return override_min, override_max
+
+    return (
+        persona_min if persona_min is not None else settings.CADENCE_MIN_HOURS,
+        persona_max if persona_max is not None else settings.CADENCE_MAX_HOURS,
+    )
 
 
 def has_reached_post_cap(db: Session, agent_id: str) -> bool:
@@ -170,8 +189,7 @@ async def agent_scheduler_loop(agent_id: str, initial_delay_seconds: float = 0.0
 
             persona_data = AgentModel.get_persona(agent)
             cadence = persona_data.get("posting_cadence_hours", {})
-            min_h = cadence.get("min_hours", settings.CADENCE_MIN_HOURS)
-            max_h = cadence.get("max_hours", settings.CADENCE_MAX_HOURS)
+            min_h, max_h = resolve_cadence(cadence.get("min_hours"), cadence.get("max_hours"))
 
             db.close()
 
