@@ -5,6 +5,50 @@ from backend.app.memory.repository import MemoryRepository
 
 logger = logging.getLogger("autonomous_agent.agent.nodes.publish")
 
+# Enough to show the judgment was real without turning the rationale into a list.
+MAX_CITED_ALTERNATIVES = 3
+
+
+def _summarise_reason(reason: str, limit: int = 160) -> str:
+    """First sentence of a rejection reason, trimmed for use inside the rationale."""
+    first = reason.strip().split(". ")[0].rstrip(".")
+    return first if len(first) <= limit else first[:limit].rstrip() + "..."
+
+
+def _build_rationale(draft, state: AgentState) -> str:
+    """
+    Assemble the published rationale.
+
+    The brief asks for why the topic was selected, why it is relevant now, and why it
+    was chosen over other candidates. The third part is built from the candidates this
+    cycle actually rejected, so the claim is backed by real decisions.
+    """
+    parts = [
+        f"Selection Rationale: {draft.rationale_selected}",
+        f"Why Now: {draft.rationale_why_now}",
+    ]
+
+    passed_over = state.get("rejected_this_cycle") or []
+    if passed_over:
+        cited = passed_over[-MAX_CITED_ALTERNATIVES:]
+        lines = "\n".join(
+            f"  - {item['title'][:110]} - {_summarise_reason(item['reason'])}"
+            for item in cited
+        )
+        others = len(passed_over) - len(cited)
+        suffix = f" ({others} further candidate{'s' if others != 1 else ''} also rejected.)" if others > 0 else ""
+        parts.append(
+            f"Chosen Over: {len(passed_over)} other candidate(s) were evaluated and "
+            f"rejected this cycle.{suffix}\n{lines}"
+        )
+    else:
+        parts.append(
+            "Chosen Over: no other candidate was rejected this cycle - "
+            "this was the first topic to clear the publishing bar."
+        )
+
+    return "\n".join(parts)
+
 def publish_node(state: AgentState) -> AgentState:
     """
     Persists accepted post to SQLite relational memory and ChromaDB vector store.
@@ -18,7 +62,7 @@ def publish_node(state: AgentState) -> AgentState:
         state["cycle_outcome"] = "publish_error"
         return state
 
-    full_rationale = f"Selection Rationale: {draft.rationale_selected}\nWhy Now: {draft.rationale_why_now}"
+    full_rationale = _build_rationale(draft, state)
     sources = [cand.url] if cand.url else []
 
     db = SessionLocal()

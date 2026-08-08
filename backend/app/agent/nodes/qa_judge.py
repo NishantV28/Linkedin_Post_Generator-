@@ -1,7 +1,7 @@
 import logging
 from backend.app.agent.state import AgentState, QAVerdict
-from backend.app.agent.llm import get_llm
-from backend.app.agent.persona.voice import has_standalone_closing_line
+from backend.app.agent.llm import get_structured_llm
+from backend.app.agent.persona.voice import borrowed_phrases, has_standalone_closing_line
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.repository import MemoryRepository
 from backend.app.agent.prompts.qa_judge import (
@@ -45,8 +45,7 @@ def qa_judge_node(state: AgentState) -> AgentState:
         return state
 
     try:
-        llm = get_llm(temperature=0.1)
-        structured_llm = llm.with_structured_output(QAVerdict)
+        structured_llm = get_structured_llm(QAVerdict, temperature=0.1)
 
         voice = persona.voice_guidelines
         forbidden_str = ", ".join(voice.forbidden_phrases) if voice.forbidden_phrases else "None"
@@ -87,6 +86,15 @@ def qa_judge_node(state: AgentState) -> AgentState:
                     f"contains forbidden phrase(s): {', '.join(found_forbidden)} - remove them"
                 )
 
+        lifted = borrowed_phrases(draft.text, voice.worked_example or "")
+        if lifted:
+            quoted = "; ".join(f'"{p}"' for p in lifted[:3])
+            problems.append(
+                f"copies wording from the style example ({quoted}) - the example shows the "
+                f"shape of a post, not sentences to reuse. Write these in your own words "
+                f"about this specific source"
+            )
+
         if voice.requires_standalone_closing_line and not has_standalone_closing_line(draft.text):
             problems.append(
                 "does not end with a standalone closing line. The final line must be a "
@@ -106,14 +114,10 @@ def qa_judge_node(state: AgentState) -> AgentState:
         state["qa_verdict"] = verdict
 
     except Exception as e:
-        logger.error(f"Error in qa_judge_node LLM invocation: {e}", exc_info=True)
-        # Conservative pass if QA LLM errors out
-        state["qa_verdict"] = QAVerdict(
-            voice_consistent=True,
-            factually_grounded=True,
-            non_repetitive=True,
-            verdict="pass",
-            feedback="Auto-passed on QA error recovery."
-        )
+        # Fail closed. Auto-passing on error meant an API blip published an unreviewed
+        # draft - the opposite of what a quality gate is for.
+        logger.error(f"QA judge could not review draft for '{cand.title[:45]}...': {e}", exc_info=True)
+        state["qa_verdict"] = None
+        state["node_error"] = f"qa_judge: {e}"
 
     return state

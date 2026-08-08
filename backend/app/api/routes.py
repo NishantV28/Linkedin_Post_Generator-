@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import timedelta, timezone
@@ -48,10 +49,12 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
             detail="Both 'name' and 'domain' must be provided in persona."
         )
 
-    # Check existing active agent for idempotency
+    # Idempotency guard. Matched case-insensitively: "distill"/"AI research" and
+    # "Distill"/"AI Research" are the same persona, and treating them as two spawns
+    # a second scheduler loop that competes for the same API quota.
     existing_agent = db.query(AgentModel).filter(
-        AgentModel.name == name,
-        AgentModel.domain == domain,
+        func.lower(AgentModel.name) == name.lower(),
+        func.lower(AgentModel.domain) == domain.lower(),
         AgentModel.active == True
     ).first()
 

@@ -2,13 +2,16 @@ import logging
 import hashlib
 import httpx
 from typing import List
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from backend.app.agent.persona.schema import PersonaConfig
 from backend.app.agent.tools.schema import TopicCandidate
 
 logger = logging.getLogger("autonomous_agent.tools.hn")
 
 HN_ALGOLIA_URL = "https://hn.algolia.com/api/v1/search"
+
+# Only consider stories from the last few weeks as "discovery".
+RECENCY_WINDOW_DAYS = 21
 
 def fetch_hn_candidates(persona: PersonaConfig, limit_per_keyword: int = 3) -> List[TopicCandidate]:
     """
@@ -27,10 +30,16 @@ def fetch_hn_candidates(persona: PersonaConfig, limit_per_keyword: int = 3) -> L
     with httpx.Client(timeout=10.0, headers=headers) as client:
         for keyword in keywords[:5]:  # Query top 5 keywords to prevent rate limiting
             try:
+                # Algolia's /search ranks by relevance with no date bound, which
+                # returns stories from years ago - live runs surfaced items 2600 and
+                # 5700 days old. Restrict to a recent window so "discovery" means
+                # current material.
+                cutoff = int((datetime.now(timezone.utc) - timedelta(days=RECENCY_WINDOW_DAYS)).timestamp())
                 params = {
                     "query": keyword,
                     "tags": "story",
-                    "hitsPerPage": limit_per_keyword
+                    "hitsPerPage": limit_per_keyword,
+                    "numericFilters": f"created_at_i>{cutoff}"
                 }
                 res = client.get(HN_ALGOLIA_URL, params=params)
                 if res.status_code != 200:

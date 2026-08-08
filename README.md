@@ -17,7 +17,8 @@ An autonomous publishing agent that digests AI research publications (from Hacke
 - `walkthrough.md`: Complete Phase 4 setup, API-key, scheduling, restart, and verification guide.
 - [`AI_USAGE_LOG.md`](AI_USAGE_LOG.md): Record of AI-assisted development across all phases.
 - [`persona-distill.md`](persona-distill.md): Persona design — identity, voice, editorial standards, and memory behaviour.
-- [`FIXES.md`](FIXES.md): Prioritised defect and advancement plan.
+- [`WHAT_CHANGED.md`](WHAT_CHANGED.md): Plain-language summary of the problems found and how each was fixed.
+- [`FIXES.md`](FIXES.md): Prioritised defect and advancement plan (technical detail).
 
 ---
 

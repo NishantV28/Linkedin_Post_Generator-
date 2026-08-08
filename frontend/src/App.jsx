@@ -26,7 +26,7 @@ function nextRun(value) {
   return `in ${Math.ceil(minutes / 60)}h`;
 }
 
-function useAgentData(agentId) {
+function useAgentData(agentId, onAgentMissing) {
   const [data, setData] = useState({ posts: null, status: null, rejected: [], error: null });
   const refresh = useCallback(async () => {
     if (!agentId) return;
@@ -36,6 +36,13 @@ function useAgentData(agentId) {
         fetch(`${API_BASE}/api/agent/status?agentId=${encodeURIComponent(agentId)}`),
         fetch(`${API_BASE}/api/agent/rejected?agentId=${encodeURIComponent(agentId)}`),
       ]);
+      // The stored agent no longer exists - typically the database was reset while the
+      // browser kept its id. Drop it and return to the init screen rather than showing
+      // an error the user cannot act on.
+      if (feedResponse.status === 404) {
+        onAgentMissing?.();
+        return;
+      }
       if (!feedResponse.ok) throw new Error(`Feed request failed (${feedResponse.status})`);
       const [feed, status, rejected] = await Promise.all([
         feedResponse.json(),
@@ -51,7 +58,7 @@ function useAgentData(agentId) {
     } catch (error) {
       setData((current) => ({ ...current, error: error.message }));
     }
-  }, [agentId]);
+  }, [agentId, onAgentMissing]);
 
   useEffect(() => {
     refresh();
@@ -115,14 +122,20 @@ export default function App() {
   const [persona, setPersona] = useState(() => {
     try { return JSON.parse(localStorage.getItem("persona")) || null; } catch { return null; }
   });
-  const { posts, status, rejected, error, refresh } = useAgentData(agentId);
+  const reset = useCallback(() => {
+    localStorage.removeItem("agentId");
+    localStorage.removeItem("persona");
+    setAgentId(null);
+    setPersona(null);
+  }, []);
+
+  const { posts, status, rejected, error, refresh } = useAgentData(agentId, reset);
 
   function initialize(id, personaInput) {
     localStorage.setItem("agentId", id);
     localStorage.setItem("persona", JSON.stringify(personaInput));
     setAgentId(id); setPersona(personaInput);
   }
-  function reset() { localStorage.removeItem("agentId"); localStorage.removeItem("persona"); setAgentId(null); setPersona(null); }
   if (!agentId || !persona) return <InitGate onInit={initialize} />;
 
   const orderedPosts = [...(posts || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

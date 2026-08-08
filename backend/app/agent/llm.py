@@ -1,10 +1,45 @@
 import os
 import logging
-from typing import Optional
+from typing import Any, Optional, Type
 from langchain_openai import ChatOpenAI
 from backend.app.core.config import settings
 
 logger = logging.getLogger("autonomous_agent.agent.llm")
+
+# Groq only supports the `json_schema` response format on some models. Everything
+# else must go through tool calling instead. Getting this wrong fails every request
+# with a 400, which previously surfaced as fabricated editorial rejections.
+JSON_SCHEMA_MODEL_PREFIXES = ("openai/gpt-oss", "gpt-4", "gpt-5", "o1", "o3")
+
+# Attempts per structured-output call, covering transient malformed tool calls.
+STRUCTURED_OUTPUT_ATTEMPTS = 3
+
+
+def structured_output_method(model_name: str) -> Optional[str]:
+    """Return the structured-output method to use, or None for the library default."""
+    if model_name.startswith(JSON_SCHEMA_MODEL_PREFIXES):
+        return None  # native json_schema support
+    return "function_calling"
+
+
+def get_structured_llm(schema: Type[Any], temperature: float = 0.2, model_name: Optional[str] = None):
+    """
+    Build a chat model bound to a structured output schema, choosing the method the
+    configured model actually supports. Use this rather than calling
+    `with_structured_output` directly, so a model swap stays a config change.
+
+    Retries because structured output is unreliable on some models: llama-3.3-70b
+    returns a malformed tool call ("tool_use_failed") roughly one time in three for
+    the post-drafting schema. That is transient and succeeds on a retry, unlike a
+    rate limit, which exhausts the attempts and correctly surfaces as an error.
+    """
+    llm = get_llm(model_name=model_name, temperature=temperature)
+    method = structured_output_method(llm.model_name)
+    if method:
+        structured = llm.with_structured_output(schema, method=method)
+    else:
+        structured = llm.with_structured_output(schema)
+    return structured.with_retry(stop_after_attempt=STRUCTURED_OUTPUT_ATTEMPTS)
 
 def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatOpenAI:
     """

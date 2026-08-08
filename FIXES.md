@@ -41,10 +41,18 @@ Start at [Suggested order](#suggested-order) for the working sequence.
 | P1-1 | Editorial thresholds never enforced | **Done** | `nodes/editorial_judge.py`, `prompts/editorial_judge.py` |
 | P1-3 | Memory never read by the judges | **Done** | `nodes/editorial_judge.py`, `nodes/qa_judge.py` |
 | — | Frontend collapsed the persona's closing line | **Done** | `frontend/src/styles.css` |
+| P1-6 | QA rejections logged the editorial judge's reasoning | **Done** | `nodes/rejection_logger.py`, `agent/graph.py` |
+| P1-4 | Rationale omitted "why over other candidates" | **Done** | `nodes/publish.py`, `agent/state.py`, `agent/graph.py` |
+| P1-5 | API failures recorded as editorial rejections | **Done** | `nodes/*.py`, `agent/graph.py`, `agent/state.py` |
+| P2-3 | Stale agentId dead-ended the dashboard | **Done** | `frontend/src/App.jsx` |
+| — | Case-sensitive init created duplicate agents | **Done** | `api/routes.py` |
+| — | Structured-output method hardcoded per model | **Done** | `agent/llm.py` |
+| — | Worked example copied verbatim into posts | **Done** | `persona/voice.py`, `nodes/qa_judge.py`, `prompts/writer.py` |
+| A-4 | **Candidate pre-filter — 63% fewer LLM calls** | **Done** | `tools/prefilter.py`, `tools/hn.py`, `tools/arxiv.py`, `core/scheduler.py` |
 
-All 17 existing tests pass after these changes.
+All **22** tests pass after these changes (4 added during this work).
 
-**A full cycle now runs and prints end-to-end**: 22 candidates discovered → 7 rejected with reasoning → 1 published, with post text, rationale, sources, and the rejection audit log all visible.
+**A full cycle now runs and prints end-to-end**: 27 candidates discovered (22 before the arXiv fix) → rejected with real scored reasoning → published with post text, rationale, sources, and the rejection audit log all visible.
 
 ---
 
@@ -101,7 +109,7 @@ Stage 2 flags "little or no development activity during the hackathon, followed 
 **Hardening (still to do):** validate the model at startup with one throwaway structured call, and fail loudly rather than degrading into fake rejections.
 
 - [ ] Add startup model validation
-- [ ] Stop writing runtime errors into `rejected_topics` — use a separate `error` outcome
+- [x] Stop writing runtime errors into `rejected_topics` — done via [P1-5](#p1-5-llm-failures-publish-garbage-instead-of-skipping--done); the cycle now aborts with an `aborted_error` outcome instead
 
 ---
 
@@ -340,7 +348,7 @@ This is the single biggest gap against the "effective use of memory" criterion �
 
 ---
 
-### P1-6. QA rejections log the *editorial* judge's reasoning
+### P1-6. QA rejections log the *editorial* judge's reasoning ✅ DONE
 
 **Found in a live run after the P0-2 fix.** [rejection_logger.py:19](backend/app/agent/nodes/rejection_logger.py#L19) always builds its reason from `judge_verdict.reasoning`, regardless of which stage rejected the topic. So a QA rejection is recorded with the editorial judge's text — which, for an item that *passed* editorial review, ends in "...leading to a pass":
 
@@ -355,24 +363,64 @@ A rejection labelled "rejected" that reads "leading to a pass", with `"decision"
 
 **Fix.** When `qa_verdict` indicates the rejection, use `qa_verdict.feedback` as the reason and record the QA booleans alongside (or instead of) the editorial scores.
 
-- [ ] Use the rejecting stage's own reasoning in `log_candidate_rejection`
-- [ ] Include QA verdict fields in `judge_scores` for QA rejections
+- [x] **The rejecting stage's own reasoning is used.** Stage detection moved into `_describe_rejection`, so the logic lives in one place instead of being duplicated between the graph router and the logger.
+- [x] **QA verdict fields recorded** in `judge_scores` (`stage`, `voice_consistent`, `factually_grounded`, `non_repetitive`), with the editorial scores preserved under `editorial_scores`.
+
+**Verified** — the same Baichuan case that previously read *"...leading to a pass"* under a rejection heading now reads *"Draft reads as a flat summary and does not answer what the paper changes."*
+
+> This bug blocked diagnosis twice during development: with QA feedback invisible, every QA-stage failure needed a separate debug script to investigate.
 
 ---
 
-### P1-4. Rationale omits "why over other candidates"
+### P1-4. Rationale omits "why over other candidates" ✅ DONE
 
 The brief's example rationale explicitly includes *"why it was chosen over other candidates."* Currently [publish.py:21](backend/app/agent/nodes/publish.py#L21) emits only selection + why-now.
 
 The data already exists — the rejections logged during that same cycle. Adding a third line naming passed-over candidates scores directly on transparency, and matches the "showing its work" behavior in the persona doc.
 
-- [ ] Thread this cycle's rejections into the published rationale
+- [x] **Rejections threaded into the published rationale.** `rejected_this_cycle` accumulates on the state as candidates are rejected, and `publish_node` builds a third `Chosen Over:` section citing up to 3 by name with the reason each was passed over.
+
+Example as served by `/api/agent/feed`:
+
+```
+Selection Rationale: Fits reasoning interests.
+Why Now: Released 2026-08-06.
+Chosen Over: 2 other candidate(s) were evaluated and rejected this cycle.
+  - An off-topic HN thread about career advice - Career discussion, not research
+  - Baichuan 2: Open Large-Scale Language Models - Draft reads as a flat summary...
+```
+
+The claim is backed by real decisions rather than asserted, which is what the brief's example rationale asks for.
 
 ---
 
-### P1-5. LLM failures publish garbage instead of skipping
+### P1-5. LLM failures publish garbage instead of skipping ✅ DONE
 
-- [writer.py:91-95](backend/app/agent/nodes/writer.py#L91-L95) falls back to `"Interesting developments in {domain}: {title}…"` — completely off-voice
+> **This failure happened for real during development, which is why it was pulled forward.** Groq's free tier has a **200,000 tokens-per-day** cap. Repeated full-cycle test runs exhausted it. The result: 3 candidates were genuinely judged, then **24 consecutive HTTP 429s were each recorded as an editorial rejection with fabricated `1,1,1,1` scores**. The feed was empty and `/api/agent/rejected` was full of API errors that read like editorial decisions.
+>
+> During a 48-hour evaluation this would have been fatal and invisible.
+
+**Fix applied.** Infrastructure failure is now distinguished from editorial judgment via a `node_error` field on the state.
+
+- [x] **Editorial judge** no longer fabricates a `1,1,1,1` rejection verdict
+- [x] **Writer** no longer emits an off-voice template draft
+- [x] **QA judge** no longer auto-*passes* an unreviewed draft — that inverted the purpose of a quality gate
+- [x] **The cycle aborts** on `node_error` via a new `abort_cycle` node. A rate limit will hit every remaining candidate too, so continuing only burns quota and pollutes the log. The scheduler records `aborted_error: ...` and retries next cycle.
+
+**Verified** with a simulated 429 across 27 candidates:
+
+| | Before | After |
+|---|---|---|
+| LLM calls attempted | 27 | **1** |
+| Fake editorial rejections logged | 27 | **0** |
+| Cycle outcome | looked like normal rejections | `aborted_error: ... 429 ... (TPD)` |
+
+> ### ⚠️ Token budget for the real run
+> The 200k/day cap is a live constraint, not a test artifact. One cycle costs roughly one editorial call per candidate (~27) plus writer and QA calls. Before the 48-hour run, take [A-4](#a-4-editorial-decision-quality)'s cheap pre-filter seriously — dropping stale and low-credibility candidates before the LLM sees them is the single biggest saving — and consider a paid tier or a second provider key.
+
+**Original notes**
+
+- [writer.py](backend/app/agent/nodes/writer.py) falls back to `"Interesting developments in {domain}: {title}…"` — completely off-voice
 - [qa_judge.py:66-72](backend/app/agent/nodes/qa_judge.py#L66-L72) **auto-passes** on error
 
 Together, one rate-limit blip puts template junk in the graded feed. Groq's free tier already returned **429s** during the local run.
@@ -484,7 +532,40 @@ Judging criterion: **transparency of publishing rationale**.
 - [ ] **Visible editorial restraint** — the persona doc's *"Skipped two papers this round — both were just bigger models with the same trick"*. Puts judgment in the feed itself, not only in a debug endpoint.
 - [ ] Fix the self-contradicting rejection log ([P1-6](#p1-6-qa-rejections-log-the-editorial-judges-reasoning))
 
-### A-4. Editorial decision quality
+### A-4. Editorial decision quality — pre-filter ✅ DONE
+
+**Why this stopped being optional.** Groq's free tier allows 200,000 tokens/day. At ~27 editorial calls per cycle the agent consumed ~29k tokens/cycle — about 6 cycles/day, against the 13-16 a 48-hour run needs. The workaround was switching to a weaker model, which **measurably degraded editorial judgment**: on the same Ask HN post, `gpt-oss-120b` scored credibility 5-6 and rejected it, while `llama-3.3-70b` scored 8 and published it.
+
+The pre-filter ([tools/prefilter.py](backend/app/agent/tools/prefilter.py)) removes candidates the persona's own thresholds already exclude, before any LLM call:
+
+- **Stale** — older than 30 days cannot be news for any persona
+- **Thin** — a summary under 60 characters gives the writer nothing concrete, which is where invented detail comes from
+- **Below the credibility ceiling** — the best score a source can realistically earn, derived from observed scoring rather than invented (arXiv 9, GitHub 7, HN 7, web 6; Ask/Tell HN self-posts capped at 5). An arXiv link posted to HN keeps the arXiv ceiling.
+- **Capped** at 10 candidates per cycle, ranked by credibility with recency as tie-breaker
+
+It deliberately makes no editorial judgement of its own — it only drops what could not clear the bar, and orders the rest.
+
+**Two root causes surfaced while measuring it:**
+
+- **Hacker News was returning stories up to 5,717 days old.** Algolia's `/search` ranks by relevance with no date bound. Added `numericFilters=created_at_i>` for a 21-day window; HN went from 15 stale candidates to 5 current ones.
+- **arXiv only fetched 5 papers**, so after filtering there were too few on-topic candidates to reliably produce a post. Raised to 15, which the per-cycle cap then trims.
+
+| | Before | After |
+|---|---|---|
+| Candidates discovered | 27 | 27 |
+| **LLM calls per cycle** | **27** | **10** |
+| Tokens per cycle | ~29,250 | ~12,250 |
+| Cycles per day within quota | 6 | **16** |
+
+A 48-hour run needs ~13-16 cycles, so `gpt-oss-120b` — the stricter judge — now fits comfortably. **`LLM_MODEL` restored to `openai/gpt-oss-120b`.**
+
+- [x] Cheap pre-filter before the LLM
+- [x] HN recency filter (also resolves the remaining half of [P0-4](#p0-4-stale-content-published-as-news--largely-resolved-by-p1-1))
+- [ ] Source corroboration across independent sources
+
+---
+
+### A-4 original notes
 
 Judging criterion: **quality of editorial decision-making**.
 
@@ -520,7 +601,10 @@ Judging criterion: **autonomous operation after initialization**.
 | ✅ | ~~**P1-2** writer prompt~~ | done — the persona doc now drives the writer and QA judge |
 | ✅ | ~~**P1-1** + **P1-3**~~ | done — thresholds enforced, memory wired into both judges |
 | ✅ | ~~**P0-5** arXiv~~ | done — found while diagnosing an empty feed; the single most consequential defect |
-| **4** | **P1-6** + **P1-4** | ← *next*. P1-6 has now blocked diagnosis twice and is visible in the demo UI |
+| ✅ | ~~**P1-6** + **P1-4** + **P1-5**~~ | done — rejection log is trustworthy, rationale cites alternatives, API errors no longer masquerade as editorial decisions |
+| **5** | **S0-1** fill in the AI log placeholders, then **S0-2** deploy | ← *next*. Both are Stage 1 pass/fail and deployment needs soak time |
+| ✅ | ~~**A-4** cheap pre-filter~~ | done — 63% fewer LLM calls, which restored the stricter model |
+| **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
 | **5** | **P0-4** recency filter | Stops stale content being published as news |
 | **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
 | **7** | **S0-2** deploy + **A-6** startup self-check | Stage 1 requirement; needs soak time before the real run |

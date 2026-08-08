@@ -37,6 +37,12 @@ class AgentState(TypedDict):
     draft: Optional[DraftPost]
     qa_verdict: Optional[QAVerdict]
     retry_count: int
+    # Set when a node fails for infrastructure reasons (rate limit, API outage).
+    # Distinct from an editorial decision, and aborts the cycle rather than being
+    # recorded as if the persona had judged the topic.
+    node_error: Optional[str]
     published_post: Optional[Dict[str, Any]]
     rejected_count: int
+    # Candidates passed over during this cycle, cited by the published post's rationale.
+    rejected_this_cycle: List[Dict[str, str]]
     cycle_outcome: str

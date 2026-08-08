@@ -2,7 +2,7 @@ import logging
 from typing import List, Tuple
 
 from backend.app.agent.state import AgentState, JudgeVerdict
-from backend.app.agent.llm import get_llm
+from backend.app.agent.llm import get_structured_llm
 from backend.app.agent.persona.schema import EditorialThresholds
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.repository import MemoryRepository
@@ -56,8 +56,7 @@ def editorial_judge_node(state: AgentState) -> AgentState:
         return state
 
     try:
-        llm = get_llm(temperature=0.2)
-        structured_llm = llm.with_structured_output(JudgeVerdict)
+        structured_llm = get_structured_llm(JudgeVerdict, temperature=0.2)
 
         # Build prompt inputs
         stable_interests_str = ", ".join(persona.stable_interests)
@@ -110,15 +109,11 @@ def editorial_judge_node(state: AgentState) -> AgentState:
         state["judge_verdict"] = verdict
 
     except Exception as e:
-        logger.error(f"Error in editorial_judge_node LLM invocation: {e}", exc_info=True)
-        # Fallback conservative rejection if LLM fails
-        state["judge_verdict"] = JudgeVerdict(
-            relevance=1,
-            novelty=1,
-            credibility=1,
-            timeliness=1,
-            decision="reject",
-            reasoning=f"Evaluation failed due to runtime error: {str(e)}"
-        )
+        # An API failure is not an editorial decision. Recording it as one fabricates
+        # scores, pollutes the public rejection log, and hides outages - a rate limit
+        # once produced 24 "rejections" that were all HTTP 429s.
+        logger.error(f"Editorial judge could not evaluate '{cand.title[:45]}...': {e}", exc_info=True)
+        state["judge_verdict"] = None
+        state["node_error"] = f"editorial_judge: {e}"
 
     return state

@@ -17,7 +17,7 @@ NAMESPACES = {
     "arxiv": "http://arxiv.org/schemas/atom"
 }
 
-def fetch_arxiv_candidates(persona: PersonaConfig, max_results: int = 5) -> List[TopicCandidate]:
+def fetch_arxiv_candidates(persona: PersonaConfig, max_results: int = 15) -> List[TopicCandidate]:
     """
     Fetch recent arXiv research papers matching persona's category or interest keywords.
     Uses public arXiv Atom API (100% public, no API key needed).

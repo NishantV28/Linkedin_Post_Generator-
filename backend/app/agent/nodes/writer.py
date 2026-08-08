@@ -1,6 +1,6 @@
 import logging
 from backend.app.agent.state import AgentState, DraftPost
-from backend.app.agent.llm import get_llm
+from backend.app.agent.llm import get_structured_llm
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.hybrid_retriever import HybridRetriever
 from backend.app.agent.persona.voice import ensure_closing_line_separation
@@ -95,8 +95,7 @@ def writer_node(state: AgentState) -> AgentState:
             revision_feedback_section=revision_section
         )
 
-        llm = get_llm(temperature=0.7)
-        structured_llm = llm.with_structured_output(DraftPost)
+        structured_llm = get_structured_llm(DraftPost, temperature=0.7)
 
         draft: DraftPost = structured_llm.invoke([
             ("system", system_msg),
@@ -110,12 +109,10 @@ def writer_node(state: AgentState) -> AgentState:
         state["draft"] = draft
 
     except Exception as e:
-        logger.error(f"Error in writer_node LLM invocation: {e}", exc_info=True)
-        # Basic fallback draft if LLM fails
-        state["draft"] = DraftPost(
-            text=f"Interesting developments in {persona.domain}: {cand.title}. {cand.summary[:150]}... Read more: {cand.url}",
-            rationale_selected=f"Selected for relevance to {persona.domain}.",
-            rationale_why_now="Timely technical update."
-        )
+        # No fallback draft. The previous template output ignored the persona's voice
+        # entirely, so an API blip would publish off-voice filler into the graded feed.
+        logger.error(f"Writer could not draft '{cand.title[:45]}...': {e}", exc_info=True)
+        state["draft"] = None
+        state["node_error"] = f"writer: {e}"
 
     return state

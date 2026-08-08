@@ -37,12 +37,10 @@ def test_editorial_judge_node_pass():
         reasoning="High quality paper aligning with persona domain."
     )
 
-    with patch("backend.app.agent.nodes.editorial_judge.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("backend.app.agent.nodes.editorial_judge.get_structured_llm") as mock_get_structured:
         mock_structured = MagicMock()
         mock_structured.invoke.return_value = mock_verdict
-        mock_llm.with_structured_output.return_value = mock_structured
-        mock_get_llm.return_value = mock_llm
+        mock_get_structured.return_value = mock_structured
 
         res_state = editorial_judge_node(state)
         assert res_state["judge_verdict"] is not None
@@ -75,12 +73,10 @@ def test_writer_node_generation():
         rationale_why_now="Timely research published today."
     )
 
-    with patch("backend.app.agent.nodes.writer.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("backend.app.agent.nodes.writer.get_structured_llm") as mock_get_structured:
         mock_structured = MagicMock()
         mock_structured.invoke.return_value = mock_draft
-        mock_llm.with_structured_output.return_value = mock_structured
-        mock_get_llm.return_value = mock_llm
+        mock_get_structured.return_value = mock_structured
 
         res_state = writer_node(state)
         assert res_state["draft"] is not None
@@ -101,13 +97,15 @@ def test_qa_judge_node_eval():
         "persona": DISTILL_PRESET,
         "agent_id": "test_agent_p3",
         "current_candidate": cand,
-        # Must satisfy the persona's structural rules, or the programmatic voice
-        # check in qa_judge_node overrides the mocked verdict.
+        # Must satisfy the persona's structural rules, and must not reuse wording from
+        # the worked example, or the programmatic voice checks in qa_judge_node
+        # override the mocked verdict.
         "draft": DraftPost(
             text=(
-                "Another paper claims better reasoning.\n"
-                "The benchmark is not the interesting part. The training strategy is.\n\n"
-                "That is the part worth paying attention to."
+                "The headline number here is a two-point gain on a reasoning suite.\n"
+                "What actually moved is the sampling budget: verification runs on every "
+                "partial trace, so wrong branches die early instead of at the end.\n\n"
+                "Cheaper supervision, not a bigger model."
             ),
             rationale_selected="Relevant",
             rationale_why_now="Now"
@@ -122,12 +120,10 @@ def test_qa_judge_node_eval():
         feedback="Looks good."
     )
 
-    with patch("backend.app.agent.nodes.qa_judge.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
         mock_structured = MagicMock()
         mock_structured.invoke.return_value = mock_qa
-        mock_llm.with_structured_output.return_value = mock_structured
-        mock_get_llm.return_value = mock_llm
+        mock_get_structured.return_value = mock_structured
 
         res_state = qa_judge_node(state)
         assert res_state["qa_verdict"] is not None
@@ -151,12 +147,10 @@ def test_editorial_judge_enforces_thresholds(scores, expected):
 
     model_verdict = JudgeVerdict(**scores, decision="pass", reasoning="Model reasoning.")
 
-    with patch("backend.app.agent.nodes.editorial_judge.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("backend.app.agent.nodes.editorial_judge.get_structured_llm") as mock_get_structured:
         mock_structured = MagicMock()
         mock_structured.invoke.return_value = model_verdict
-        mock_llm.with_structured_output.return_value = mock_structured
-        mock_get_llm.return_value = mock_llm
+        mock_get_structured.return_value = mock_structured
 
         res_state = editorial_judge_node(state)
 
@@ -199,12 +193,10 @@ def test_qa_judge_enforces_persona_structure():
         feedback="Looks good."
     )
 
-    with patch("backend.app.agent.nodes.qa_judge.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
         mock_structured = MagicMock()
         mock_structured.invoke.return_value = approving_verdict
-        mock_llm.with_structured_output.return_value = mock_structured
-        mock_get_llm.return_value = mock_llm
+        mock_get_structured.return_value = mock_structured
 
         res_state = qa_judge_node(state)
 
@@ -212,3 +204,46 @@ def test_qa_judge_enforces_persona_structure():
     assert verdict.verdict == "revise", "structure violation must override the LLM verdict"
     assert verdict.voice_consistent is False
     assert "standalone closing line" in verdict.feedback
+
+
+def test_qa_judge_rejects_wording_copied_from_the_style_example():
+    """The worked example demonstrates shape; reusing its sentences is not the voice."""
+    cand = TopicCandidate(
+        id="cand_5", title="Sample", summary="s",
+        url="https://news.ycombinator.com/item?id=1", source="hn",
+        published_at="2026-08-08T10:00:00Z"
+    )
+
+    # Observed in a live run: three of four sentences lifted from the example, which
+    # also made the post factually wrong - the source was a forum thread, not a paper,
+    # and no benchmark score was involved.
+    state = {
+        "persona": DISTILL_PRESET,
+        "agent_id": "test_agent_p3",
+        "current_candidate": cand,
+        "draft": DraftPost(
+            text=(
+                "Another paper claims efficient MoE inference. But the interesting part "
+                "isn't the benchmark score. It's the lossless compression strategy.\n\n"
+                "That's the part worth paying attention to."
+            ),
+            rationale_selected="Relevant",
+            rationale_why_now="Now"
+        )
+    }
+
+    approving_verdict = QAVerdict(
+        voice_consistent=True, factually_grounded=True, non_repetitive=True,
+        verdict="pass", feedback="Looks good."
+    )
+
+    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = approving_verdict
+        mock_get_structured.return_value = mock_structured
+
+        res_state = qa_judge_node(state)
+
+    verdict = res_state["qa_verdict"]
+    assert verdict.verdict == "revise"
+    assert "style example" in verdict.feedback

@@ -16,6 +16,13 @@ STRUCTURE - follow these beats in order
 HOW THIS SOUNDS WHEN IT WORKS
 {worked_example}
 
+That example shows the SHAPE of a post. It is not a template.
+Do not reuse its sentences or phrases. "Another paper claims...", "the interesting
+part isn't the benchmark score", "that's the part worth paying attention to" are
+that example's words, not yours. Write every line fresh, about this source.
+Never describe the source as a "paper" unless it actually is one, and never mention
+a benchmark, score, or result that does not appear in the material you were given.
+
 VOICE
 - Tone: {tone}
 - Rhythm: {sentence_rhythm}

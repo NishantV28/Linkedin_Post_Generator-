@@ -19,6 +19,8 @@ def start_cycle(state: AgentState) -> AgentState:
     state["candidate_idx"] = 0
     state["retry_count"] = 0
     state["rejected_count"] = 0
+    state["rejected_this_cycle"] = []
+    state["node_error"] = None
     state["published_post"] = None
     state["cycle_outcome"] = "in_progress"
 
@@ -33,19 +35,28 @@ def start_cycle(state: AgentState) -> AgentState:
 
     return state
 
+def abort_cycle(state: AgentState) -> AgentState:
+    """
+    End the cycle after an infrastructure failure.
+
+    A rate limit or outage will hit every remaining candidate too, so continuing only
+    burns quota and fills the rejection log with errors disguised as editorial calls.
+    The scheduler records the outcome and simply tries again next cycle.
+    """
+    error = state.get("node_error", "unknown error")
+    logger.error(f"Aborting cycle after infrastructure failure - {error}")
+    state["cycle_outcome"] = f"aborted_error: {str(error)[:120]}"
+    return state
+
+
 def log_rejection(state: AgentState) -> AgentState:
     """
     Persist the current candidate's rejection.
 
-    This is a node, not a router side effect, so its `rejected_count` increment
-    actually survives into the next step of the graph.
+    This is a node, not a router side effect, so its state updates - the rejection
+    count and the running list of passed-over candidates - survive into the next step.
     """
-    qa = state.get("qa_verdict")
-    if qa and qa.verdict.lower() != "pass":
-        prefix = "[QA Judge Rejected after revision limit]"
-    else:
-        prefix = "[Editorial Judge Rejected]"
-    return log_candidate_rejection(state, reason_prefix=prefix)
+    return log_candidate_rejection(state)
 
 def advance_candidate(state: AgentState) -> AgentState:
     """Advance candidate pointer to the next topic candidate."""
@@ -73,13 +84,23 @@ def route_after_start(state: AgentState) -> Literal["editorial_judge", "__end__"
         return END
     return "editorial_judge"
 
-def route_after_judge(state: AgentState) -> Literal["writer", "log_rejection"]:
+def route_after_judge(state: AgentState) -> Literal["writer", "log_rejection", "abort_cycle"]:
+    if state.get("node_error"):
+        return "abort_cycle"
     verdict = state.get("judge_verdict")
     if verdict and verdict.decision.lower() == "pass":
         return "writer"
     return "log_rejection"
 
-def route_after_qa(state: AgentState) -> Literal["publish", "writer", "log_rejection"]:
+def route_after_writer(state: AgentState) -> Literal["qa_judge", "abort_cycle"]:
+    if state.get("node_error"):
+        return "abort_cycle"
+    return "qa_judge"
+
+def route_after_qa(state: AgentState) -> Literal["publish", "writer", "log_rejection", "abort_cycle"]:
+    if state.get("node_error"):
+        return "abort_cycle"
+
     qa = state.get("qa_verdict")
     retry_count = state.get("retry_count", 0)
 
@@ -111,6 +132,7 @@ def build_agent_graph():
     workflow.add_node("qa_judge", qa_judge_node)
     workflow.add_node("publish", publish_node)
     workflow.add_node("log_rejection", log_rejection)
+    workflow.add_node("abort_cycle", abort_cycle)
     workflow.add_node("advance_candidate", advance_candidate)
 
     # Set Entry Point
@@ -119,9 +141,10 @@ def build_agent_graph():
     # Add Edges & Conditional Routing
     workflow.add_conditional_edges("start_cycle", route_after_start)
     workflow.add_conditional_edges("editorial_judge", route_after_judge)
-    workflow.add_edge("writer", "qa_judge")
+    workflow.add_conditional_edges("writer", route_after_writer)
     workflow.add_conditional_edges("qa_judge", route_after_qa)
     workflow.add_edge("log_rejection", "advance_candidate")
+    workflow.add_edge("abort_cycle", END)
     workflow.add_edge("publish", END)
     workflow.add_conditional_edges("advance_candidate", route_after_advance)
 

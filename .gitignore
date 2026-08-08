@@ -31,3 +31,5 @@ frontend/.env.local
 .pytest_cache/
 .coverage
 htmlcov/
+WHAT_CHANGED.md
+

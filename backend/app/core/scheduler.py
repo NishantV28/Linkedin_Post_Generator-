@@ -10,6 +10,7 @@ from backend.app.memory.db import SessionLocal
 from backend.app.memory.models import AgentModel, CycleRunModel, PostModel, utc_now
 from backend.app.agent.persona.schema import PersonaConfig
 from backend.app.agent.tools.discovery import discover_all_candidates
+from backend.app.agent.tools.prefilter import prefilter_candidates
 from backend.app.memory.hybrid_retriever import HybridRetriever
 from backend.app.agent.graph import agent_graph
 
@@ -77,10 +78,12 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
 
         logger.info(f"--- STARTING AUTONOMOUS CYCLE #{agent.cycle_count + 1} FOR AGENT '{agent.name}' ({agent_id}) ---")
 
-        # 1. Discover candidates
+        # 1. Discover candidates, then triage cheaply before spending any LLM calls.
         raw_candidates = discover_all_candidates(persona)
         seen_count = len(raw_candidates)
         logger.info(f"Discovered {seen_count} raw candidates.")
+
+        raw_candidates = prefilter_candidates(raw_candidates, persona)
 
         # 2. Hybrid Deduplication. The batch doubles as extra IDF corpus, so
         # terms common across this cycle's candidates count as generic.
