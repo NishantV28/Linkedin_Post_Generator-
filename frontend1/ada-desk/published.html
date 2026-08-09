@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ada Desk — Published</title>
+<script>
+  (function() {
+    var savedTheme = localStorage.getItem("ada-theme");
+    if (savedTheme === "light") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    }
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="assets/js/tailwind-config.js"></script>
+<link rel="stylesheet" href="assets/css/styles.css"/>
+</head>
+<body data-page="published" class="font-body-md text-body-md antialiased overflow-hidden flex h-screen w-screen">
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+<div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-primary/5 blur-[150px] rounded-full"></div>
+</div>
+
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden"></div>
+
+<aside id="sidebar" class="flex flex-col fixed left-0 top-0 h-full w-64 z-40 bg-surface-container-lowest border-r border-glass-stroke pt-20 pb-8 transition-all">
+<div class="px-6 mb-10">
+<h2 class="font-headline-lg text-primary text-2xl font-bold tracking-tight mb-1">Ada Engine</h2>
+<div class="flex items-center gap-2">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">v4.2.0-Active</span>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-3">
+<a data-page-link="home" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="index.html">
+<span class="material-symbols-outlined">home</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Home</span>
+</a>
+<a data-page-link="published" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 relative overflow-hidden transition-all duration-300 rounded-lg mx-3" href="published.html">
+<div class="nav-glow absolute inset-0 bg-primary/10 blur-[40px] pointer-events-none"></div>
+<span class="material-symbols-outlined">article</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Published</span>
+</a>
+<a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="spiked.html">
+<span class="material-symbols-outlined">delete_forever</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+</a>
+<a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Cycle Log</span>
+</a>
+<a data-page-link="api" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="api.html">
+<span class="material-symbols-outlined">api</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">API</span>
+</a>
+</nav>
+<div class="px-6 mb-6">
+<button data-initiate-cycle class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 px-4 rounded hover:bg-primary-fixed transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+Initiate Cycle
+</button>
+</div>
+<div class="mt-auto flex flex-col gap-1 px-3 border-t border-glass-stroke pt-4 mx-3">
+<button data-theme-toggle class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg w-full text-left" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-lg" data-theme-icon>light_mode</span>
+<span class="font-label-caps text-label-caps" data-theme-label>Light Theme</span>
+</button>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">help</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-3xl border-b border-glass-stroke shadow-sm shadow-primary/5 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 transition-all duration-300">
+<div class="flex items-center gap-4">
+<button id="menu-toggle" class="md:hidden text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-bold text-primary tracking-tight">
+Ada Desk
+</div>
+</div>
+<div class="hidden md:flex flex-1 max-w-md mx-8 relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input id="global-search" class="w-full bg-surface-container-lowest border border-glass-stroke rounded text-code-sm font-code-sm text-on-surface pl-9 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Query intelligence databank..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-2 border-r border-glass-stroke pr-4 mr-2">
+<button data-theme-toggle class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-xl" data-theme-icon>light_mode</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">memory</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high relative">
+<span class="material-symbols-outlined text-xl">sensors</span>
+<span class="absolute top-2 right-2 w-1.5 h-1.5 bg-error rounded-full animate-pulse"></span>
+</button>
+<a href="cycle-log.html" class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</a>
+</div>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+<div class="w-8 h-8 rounded border border-primary/30 overflow-hidden relative bg-surface-container-lowest">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent"></div>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary text-sm">robot_2</span>
+</div>
+</button>
+</div>
+</header>
+
+<main class="flex-1 w-full pt-16 md:pl-64 h-full flex flex-col z-10 relative overflow-hidden">
+<!-- Page Header -->
+<div class="px-margin-mobile md:px-margin-desktop py-8 border-b border-glass-stroke bg-surface-elevated/30">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 max-w-max-width mx-auto">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="font-label-caps text-label-caps text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">SYSTEM LOG</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">/out/published</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-xl md:text-headline-xl text-on-surface">Published Intelligence</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2 max-w-2xl">Terminal view of recent advisories, vulnerability disclosures, and automated analysis reports generated by the Ada engine.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex bg-surface-container-lowest border border-glass-stroke rounded p-1">
+<button data-view-toggle="list" class="view-toggle-btn px-3 py-1 rounded bg-surface-container-high text-on-surface font-label-caps text-label-caps text-xs">LIST</button>
+<button data-view-toggle="grid" class="view-toggle-btn px-3 py-1 rounded text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps text-xs transition-colors">GRID</button>
+</div>
+<button id="published-filter-btn" class="flex items-center gap-2 px-3 py-1.5 border border-glass-stroke rounded text-on-surface-variant hover:text-on-surface hover:border-outline transition-colors font-code-sm text-code-sm relative">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+Filter
+<span id="active-filter-badge" class="hidden w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</button>
+</div>
+</div>
+
+<!-- Expandable Filter Bar -->
+<div id="published-filter-bar" class="hidden mt-6 pt-6 border-t border-glass-stroke flex flex-wrap items-center gap-4 bg-surface-container-lowest/60 p-4 rounded-xl border border-glass-stroke transition-all">
+<div class="flex-1 min-w-[200px] relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input id="published-search-input" class="w-full bg-surface border border-glass-stroke rounded py-1.5 pl-9 pr-4 font-code-sm text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary outline-none" placeholder="Filter title, vector, or content..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-[11px] text-on-surface-variant uppercase">Category:</span>
+<select id="published-category-select" class="bg-surface border border-glass-stroke rounded pl-3 pr-8 py-1.5 font-code-sm text-xs text-on-surface focus:border-primary outline-none cursor-pointer min-w-[160px]">
+<option value="ALL">All Categories</option>
+<option value="VULNERABILITY">Vulnerability</option>
+<option value="ADVISORY">Advisory</option>
+<option value="ANALYSIS">Analysis</option>
+<option value="RE-EVALUATED">Re-Evaluated</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-[11px] text-on-surface-variant uppercase">Confidence:</span>
+<select id="published-confidence-select" class="bg-surface border border-glass-stroke rounded pl-3 pr-8 py-1.5 font-code-sm text-xs text-on-surface focus:border-primary outline-none cursor-pointer min-w-[170px]">
+<option value="0">All Confidence Levels</option>
+<option value="95">High (≥95%)</option>
+<option value="85">Medium (≥85%)</option>
+<option value="70">Standard (≥70%)</option>
+</select>
+</div>
+<button id="published-clear-filter" class="px-3 py-1.5 text-xs font-label-caps uppercase text-error hover:text-error/80 transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">close</span> Clear
+</button>
+</div>
+</div>
+
+<div class="flex-1 overflow-y-auto px-margin-mobile md:px-margin-desktop py-8">
+<div class="max-w-max-width mx-auto">
+<div class="glass-panel rounded-lg overflow-hidden flex flex-col">
+<div class="hidden md:grid grid-cols-[1fr_150px_120px_100px] gap-4 px-6 py-3 border-b border-glass-stroke bg-surface-container-lowest/50 font-label-caps text-label-caps text-on-surface-variant text-xs">
+<div>REPORT ID / TITLE</div>
+<div>TIMESTAMP</div>
+<div>CONFIDENCE</div>
+<div class="text-right">ACTIONS</div>
+</div>
+<div class="flex flex-col">
+<div class="group relative grid grid-cols-1 md:grid-cols-[1fr_150px_120px_100px] gap-4 p-4 md:px-6 border-b border-glass-stroke hover:bg-surface-container-highest/30 transition-colors">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-left"></div>
+<div class="flex flex-col justify-center min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-code-sm text-[10px] leading-none text-primary">RPT-8992-A</span>
+<span class="w-1 h-1 rounded-full bg-glass-stroke"></span>
+<span class="font-label-caps text-[10px] leading-none text-on-surface-variant">VULNERABILITY</span>
+</div>
+<h3 class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors">Vulnerability Analysis: RAG Injection via Malformed Prompt Vectors</h3>
+</div>
+<div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">2023-10-24 14:32:01Z</div>
+<div class="flex items-center">
+<div class="flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-2 py-1 rounded text-primary font-code-sm text-xs">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+98.4%
+</div>
+</div>
+<div class="hidden md:flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-lowest transition-colors" title="View Log">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container-lowest transition-colors" title="Open Report">
+<span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+</div>
+<div class="group relative grid grid-cols-1 md:grid-cols-[1fr_150px_120px_100px] gap-4 p-4 md:px-6 border-b border-glass-stroke hover:bg-surface-container-highest/30 transition-colors">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary scale-y-0 group-hover:scale-y-100 transition-transform origin-left"></div>
+<div class="flex flex-col justify-center min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-code-sm text-[10px] leading-none text-secondary">RPT-8991-B</span>
+<span class="w-1 h-1 rounded-full bg-glass-stroke"></span>
+<span class="font-label-caps text-[10px] leading-none text-on-surface-variant">ADVISORY</span>
+</div>
+<h3 class="font-body-md text-body-md text-on-surface truncate group-hover:text-secondary transition-colors">Emerging Threat: Shadow AI API Gateway Bypass</h3>
+</div>
+<div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">2023-10-24 11:15:44Z</div>
+<div class="flex items-center">
+<div class="flex items-center gap-1.5 bg-secondary/10 border border-secondary/20 px-2 py-1 rounded text-secondary font-code-sm text-xs">
+<span class="material-symbols-outlined text-[14px]">warning</span>
+82.1%
+</div>
+</div>
+<div class="hidden md:flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-secondary rounded hover:bg-surface-container-lowest transition-colors" title="View Log">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container-lowest transition-colors" title="Open Report">
+<span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+</div>
+<div class="group relative grid grid-cols-1 md:grid-cols-[1fr_150px_120px_100px] gap-4 p-4 md:px-6 border-b border-glass-stroke hover:bg-surface-container-highest/30 transition-colors">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-left"></div>
+<div class="flex flex-col justify-center min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-code-sm text-[10px] leading-none text-primary">RPT-8988-A</span>
+<span class="w-1 h-1 rounded-full bg-glass-stroke"></span>
+<span class="font-label-caps text-[10px] leading-none text-on-surface-variant">ANALYSIS</span>
+</div>
+<h3 class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors">Solid-State Breakout vs Market Hesitation</h3>
+</div>
+<div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">2023-10-23 09:02:10Z</div>
+<div class="flex items-center">
+<div class="flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-2 py-1 rounded text-primary font-code-sm text-xs">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+95.6%
+</div>
+</div>
+<div class="hidden md:flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-lowest transition-colors" title="View Log">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container-lowest transition-colors" title="Open Report">
+<span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+<div class="p-4 flex justify-center border-t border-glass-stroke bg-surface-container-lowest/30">
+<button id="load-older" class="font-code-sm text-code-sm text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2">
+[ FETCH_OLDER_RECORDS ]
+<span class="material-symbols-outlined text-sm animate-bounce">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<script src="assets/js/agent-engine.js"></script>
+<script src="assets/js/agent-api.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

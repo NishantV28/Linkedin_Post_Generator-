@@ -20,6 +20,27 @@ logger = logging.getLogger("autonomous_agent.core.scheduler")
 
 # Global task registry to prevent duplicate running tasks per agent
 _running_tasks: Dict[str, asyncio.Task] = {}
+# Ephemeral execution state for the UI. It is intentionally not persisted: a
+# restarted process cannot truthfully claim to still be analysing an old topic.
+_agent_activity: Dict[str, Dict[str, Optional[str]]] = {}
+
+
+def set_agent_activity(agent_id: str, state: str, detail: str, article_title: Optional[str] = None) -> None:
+    _agent_activity[agent_id] = {
+        "state": state,
+        "detail": detail,
+        "articleTitle": article_title,
+        "updatedAt": utc_now().isoformat(),
+    }
+
+
+def get_agent_activity(agent_id: str) -> Dict[str, Optional[str]]:
+    return _agent_activity.get(agent_id, {
+        "state": "idle",
+        "detail": "Waiting for the next scheduled cycle.",
+        "articleTitle": None,
+        "updatedAt": None,
+    })
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -79,6 +100,7 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
         persona = PersonaConfig.model_validate(persona_data)
 
         logger.info(f"--- STARTING AUTONOMOUS CYCLE #{agent.cycle_count + 1} FOR AGENT '{agent.name}' ({agent_id}) ---")
+        set_agent_activity(agent_id, "discovering", "Discovering and filtering source candidates.")
 
         # 1. Discover candidates, then triage cheaply before spending any LLM calls.
         raw_candidates = discover_all_candidates(persona)
@@ -116,6 +138,14 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
         surviving_candidates = HybridRetriever.order_by_topic_spacing(
             surviving_candidates, agent_id=agent.id, db=db
         )
+
+        if surviving_candidates:
+            set_agent_activity(
+                agent_id,
+                "analyzing",
+                "Evaluating the leading candidate for editorial relevance and factual grounding.",
+                surviving_candidates[0].title,
+            )
 
         # Occasionally step back and write about a pattern in its own coverage instead
         # of a new source. Detected deterministically, and None on most cycles. Checked
@@ -187,6 +217,7 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
             db.commit()
         except Exception as err:
             logger.error(f"Failed to record cycle run audit row: {err}")
+        set_agent_activity(agent_id, "idle", f"Last cycle finished: {outcome}.")
         db.close()
 
 async def agent_scheduler_loop(agent_id: str, initial_delay_seconds: float = 0.0):

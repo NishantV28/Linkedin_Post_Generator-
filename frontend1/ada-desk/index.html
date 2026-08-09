@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ada Desk — Home</title>
+<script>
+  (function() {
+    var savedTheme = localStorage.getItem("ada-theme");
+    if (savedTheme === "light") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    }
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="assets/js/tailwind-config.js"></script>
+<link rel="stylesheet" href="assets/css/styles.css"/>
+</head>
+<body data-page="home" class="font-body-md text-body-md antialiased overflow-hidden flex h-screen w-screen">
+<!-- Background Decoration -->
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+<div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-primary/5 blur-[150px] rounded-full"></div>
+</div>
+
+<!-- Mobile drawer overlay -->
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden"></div>
+
+<!-- SideNavBar -->
+<aside id="sidebar" class="flex flex-col fixed left-0 top-0 h-full w-64 z-40 bg-surface-container-lowest border-r border-glass-stroke pt-20 pb-8 transition-all">
+<div class="px-6 mb-10">
+<h2 class="font-headline-lg text-primary text-2xl font-bold tracking-tight mb-1">Ada Engine</h2>
+<div class="flex items-center gap-2">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">v4.2.0-Active</span>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-3">
+<a data-page-link="home" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 relative overflow-hidden transition-all duration-300 rounded-lg mx-3" href="index.html">
+<div class="nav-glow absolute inset-0 bg-primary/10 blur-[40px] pointer-events-none"></div>
+<span class="material-symbols-outlined">home</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Home</span>
+</a>
+<a data-page-link="published" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="published.html">
+<span class="material-symbols-outlined">article</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Published</span>
+</a>
+<a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="spiked.html">
+<span class="material-symbols-outlined">delete_forever</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+</a>
+<a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Cycle Log</span>
+</a>
+<a data-page-link="api" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="api.html">
+<span class="material-symbols-outlined">api</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">API</span>
+</a>
+</nav>
+<div class="px-6 mb-6">
+<button data-initiate-cycle class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 px-4 rounded hover:bg-primary-fixed transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+Initiate Cycle
+</button>
+</div>
+<div class="mt-auto flex flex-col gap-1 px-3 border-t border-glass-stroke pt-4 mx-3">
+<button data-theme-toggle class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg w-full text-left" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-lg" data-theme-icon>light_mode</span>
+<span class="font-label-caps text-label-caps" data-theme-label>Light Theme</span>
+</button>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">help</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-3xl border-b border-glass-stroke shadow-sm shadow-primary/5 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 transition-all duration-300">
+<div class="flex items-center gap-4">
+<button id="menu-toggle" class="md:hidden text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-bold text-primary tracking-tight">
+Ada Desk
+</div>
+</div>
+<div class="hidden md:flex flex-1 max-w-md mx-8 relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input id="global-search" class="w-full bg-surface-container-lowest border border-glass-stroke rounded text-code-sm font-code-sm text-on-surface pl-9 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Query intelligence databank..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-2 border-r border-glass-stroke pr-4 mr-2">
+<button data-theme-toggle class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-xl" data-theme-icon>light_mode</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">memory</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high relative">
+<span class="material-symbols-outlined text-xl">sensors</span>
+<span class="absolute top-2 right-2 w-1.5 h-1.5 bg-error rounded-full animate-pulse"></span>
+</button>
+<a href="cycle-log.html" class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</a>
+</div>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+<div class="w-8 h-8 rounded border border-primary/30 overflow-hidden relative bg-surface-container-lowest">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent"></div>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary text-sm">robot_2</span>
+</div>
+</button>
+</div>
+</header>
+
+<!-- Main Content Area -->
+<main class="flex-1 w-full pt-16 md:pl-64 h-full flex flex-col z-10 relative overflow-hidden">
+<div class="flex-1 overflow-y-auto px-margin-mobile md:px-margin-desktop py-8">
+<div class="max-w-max-width mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+
+<!-- Centerpiece: Ada Persona Profile -->
+<div class="md:col-span-8 glass-panel rounded-xl p-8 relative overflow-hidden">
+<div class="relative z-10 flex flex-col md:flex-row items-start gap-8">
+<div onclick="openDiagnosticsModal()" class="w-32 h-32 rounded-lg overflow-hidden border border-primary/50 shrink-0 relative group bg-gradient-to-br from-primary/20 via-surface-container to-surface-container-lowest flex items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined text-primary text-6xl">smart_toy</span>
+<div class="absolute inset-0 bg-primary/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+<span class="material-symbols-outlined text-primary">memory</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-primary font-bold mb-1">Ada Primary</h2>
+<p class="font-code-sm text-code-sm text-on-surface-variant">ID: EDITORIAL_AGENT_01 • STATUS: AUTONOMOUS</p>
+</div>
+<span class="bg-primary/10 text-primary border border-primary/30 px-3 py-1 rounded font-label-caps text-label-caps flex items-center gap-2 shrink-0">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+ONLINE
+</span>
+</div>
+<p id="agent-activity-summary" class="font-body-md text-body-md text-on-surface-variant mb-6 max-w-2xl">
+Currently analyzing incoming intelligence feeds, cross-referencing global economic indicators, and drafting synthesized narratives for the morning cycle. Resource allocation is optimal.
+</p>
+<div class="grid grid-cols-3 gap-4 border-t border-glass-stroke pt-6">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Current Focus</div>
+<div id="current-focus" class="font-code-sm text-code-sm text-primary truncate">Waiting for backend data</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Articles Drafted (24h)</div>
+<div id="articles-drafted" class="font-code-sm text-code-sm text-on-surface">0</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Accuracy Confidence</div>
+<div id="accuracy-confidence" class="font-code-sm text-code-sm text-primary">—</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- System Stats Panel -->
+<div class="md:col-span-4 glass-panel rounded-xl p-6 flex flex-col justify-between">
+<div>
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary">monitoring</span>
+<h3 class="font-label-caps text-label-caps text-on-surface">System Metrics</h3>
+</div>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between mb-2">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Publish Rate</span>
+<span class="font-code-sm text-code-sm text-primary">4.2%</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[4.2%] shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Cadence Cycle</span>
+<span class="font-code-sm text-code-sm text-on-surface">~150 min</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[65%]"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 mt-8">
+<div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Compute</div>
+<div class="font-code-sm text-code-sm text-primary">78%</div>
+</div>
+<div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">API Calls</div>
+<div class="font-code-sm text-code-sm text-secondary">24k/s</div>
+</div>
+<div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Memory</div>
+<div class="font-code-sm text-code-sm text-primary">12GB</div>
+</div>
+</div>
+</div>
+
+<!-- Active Feed (Terminal Widget) -->
+<div class="md:col-span-12 glass-panel rounded-xl p-6 h-[400px] flex flex-col mt-4">
+<div class="flex justify-between items-center border-b border-glass-stroke pb-4 mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">terminal</span>
+<h3 class="font-label-caps text-label-caps text-on-surface">Active Analysis Feed</h3>
+</div>
+<div class="flex gap-2">
+<div class="w-3 h-3 rounded-full bg-error-container border border-error"></div>
+<div class="w-3 h-3 rounded-full bg-secondary-container border border-secondary"></div>
+<div class="w-3 h-3 rounded-full bg-primary-container border border-primary"></div>
+</div>
+</div>
+<div id="analysis-feed" class="flex-1 overflow-y-auto no-scrollbar font-code-sm text-code-sm space-y-3 pl-2">
+<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+<span class="text-on-surface-variant opacity-50 select-none">10:42:01</span>
+<span class="text-primary">[DISCOVERY]</span>
+<span class="text-on-surface">Ingesting sub-reddit /r/technology trend spikes regarding new solid-state battery tech.</span>
+</div>
+<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+<span class="text-on-surface-variant opacity-50 select-none">10:42:05</span>
+<span class="text-secondary">[ANALYSIS]</span>
+<span class="text-on-surface-variant">Cross-referencing claims with recent patent filings in USPTO database. 3 matches found.</span>
+</div>
+<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+<span class="text-on-surface-variant opacity-50 select-none">10:42:12</span>
+<span class="text-primary">[DISCOVERY]</span>
+<span class="text-on-surface">Sentiment shift detected in European market futures concerning tech sector.</span>
+</div>
+<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+<span class="text-on-surface-variant opacity-50 select-none">10:42:18</span>
+<span class="text-tertiary">[DRAFTING]</span>
+<span class="text-on-surface-variant">Initiating preliminary article framework: "Solid-State Breakout vs Market Hesitation". Contextual depth: Deep.</span>
+</div>
+<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+<span class="text-on-surface-variant opacity-50 select-none">10:42:22</span>
+<span class="text-secondary">[ANALYSIS]</span>
+<span class="text-on-surface-variant">Running bias-check heuristic on draft section 1. Score: 0.04 (Neutral).</span>
+</div>
+<div data-cursor class="flex gap-4 items-center mt-2">
+<span class="text-on-surface-variant opacity-50 select-none">now</span>
+<span class="w-2 h-4 bg-primary animate-pulse"></span>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</main>
+
+<script src="assets/js/agent-engine.js"></script>
+<script src="assets/js/agent-api.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

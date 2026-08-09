@@ -7,7 +7,7 @@ from datetime import timedelta, timezone
 
 from backend.app.memory.db import get_db
 from backend.app.memory.models import AgentModel, PostModel, RejectedTopicModel, utc_now
-from backend.app.core.scheduler import calculate_next_delay, resolve_cadence, start_agent_task
+from backend.app.core.scheduler import calculate_next_delay, get_agent_activity, resolve_cadence, start_agent_task
 from backend.app.agent.persona.presets import get_preset_by_name_or_domain
 from backend.app.schemas.agent import (
     InitRequest,
@@ -158,6 +158,15 @@ def get_status(agentId: Optional[str] = Query(None), db: Session = Depends(get_d
             )
         )
     return StatusResponse(agents=result)
+
+
+@router.get("/activity")
+def get_activity(agentId: str = Query(..., description="Target Agent ID"), db: Session = Depends(get_db)):
+    """Return truthful, in-memory progress for a currently executing cycle."""
+    agent = db.query(AgentModel).filter(AgentModel.id == agentId).first()
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent with id '{agentId}' not found.")
+    return get_agent_activity(agentId)
 
 
 @router.get("/rejected", response_model=RejectedTopicsResponse)
