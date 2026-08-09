@@ -160,7 +160,6 @@ The React client stores `agentId` and persona details in `localStorage`. Once in
 - `frontend/`: Vite + React monitoring dashboard.
 - `backend/tests/`: API, graph, and scheduling contract tests.
 - `walkthrough.md`: live-data/API-key, scheduling, restart, and verification guide.
-- `persona-distill.md`: persona identity, voice, editorial standards, and memory behavior.
 
 ## Quick start
 

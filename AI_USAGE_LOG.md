@@ -28,7 +28,7 @@ Repository: <https://github.com/NishantV28/Linkedin_Post_Generator->
 | | |
 |---|---|
 | Commits in Part 2 | 7 (`31ab818` … `4fd20b0`) |
-| Defects found and fixed | 20+, recorded in [FIXES.md](FIXES.md) |
+| Defects found and fixed | 20+ |
 | Automated tests | 23 → **33 passing** |
 | Most consequential find | arXiv had never returned a candidate; every post came from forum headlines rather than papers |
 | Largest refactor | Editorial judgment split from writing, per the author's specification |
@@ -39,7 +39,7 @@ Repository: <https://github.com/NishantV28/Linkedin_Post_Generator->
 
 # Part 1 — Phased build
 
-Planning document: [implementation.md](implementation.md). Persona design: [persona-distill.md](persona-distill.md).
+Built to a phased plan, against a written persona definition covering voice, editorial standards and memory behaviour.
 
 All five phases were completed on 2026-08-08 between 11:25 and 14:25.
 
@@ -104,13 +104,13 @@ Built: Vite + React dashboard; persona init form; polling of `/feed`, `/status` 
 
 **Tool:** Claude Code (Claude Opus 5) · **Date:** 2026-08-08, from ~14:46
 
-An AI-assisted review session against the problem statement. Work products: [FIXES.md](FIXES.md) (prioritised defect and advancement plan) and the fixes below.
+An AI-assisted review session against the problem statement. Work products: a prioritised defect and advancement plan, and the fixes below.
 
 ### 2.1 Codebase review against the problem statement
 
 **Prompt (paraphrased):** *"This is my problem statement and my current folder shows what I have done till now. Study it and tell me what changes can be done. Don't make any changes, I just want to see for now."*
 
-The full backend, agent graph, memory layer, discovery tools, frontend, tests and docs were read and assessed against the six judging criteria. Findings were recorded in [FIXES.md](FIXES.md), organised as S0 (eligibility), P0 (blocking), P1 (scoring), P2 (robustness) and A (advanced upgrades).
+The full backend, agent graph, memory layer, discovery tools, frontend, tests and docs were read and assessed against the six judging criteria. Findings were triaged as eligibility, blocking, scoring, robustness and advanced upgrades.
 
 ### 2.2 Getting the project running
 
@@ -210,7 +210,7 @@ Scoring moved to five dimensions on 0-5 with eleven named disqualifiers, enforce
 
 ### 2.14 Outstanding work
 
-Tracked in [FIXES.md](FIXES.md) with a prioritised order. The two items that gate the submission are the `TO COMPLETE` sections of this document and deployment to an always-on host; everything else affects score rather than eligibility.
+The two items that gate the submission are the `TO COMPLETE` sections of this document and deployment to an always-on host. Everything else affects score rather than eligibility: discovery-source polish, a style-drift guard, and visible editorial restraint in the feed.
 
 ---
 
@@ -218,7 +218,7 @@ Tracked in [FIXES.md](FIXES.md) with a prioritised order. The two items that gat
 
 > **TO COMPLETE.** Judges weigh how the author directed, evaluated and corrected AI output. Worth stating explicitly:
 >
-> - Persona design and editorial standards — [persona-distill.md](persona-distill.md) is original design work defining voice, beliefs, post structure and rejection criteria
-> - Architecture decisions — stack selection, phased plan in [implementation.md](implementation.md)
+> - Persona design and editorial standards — original design work defining voice, beliefs, post structure and rejection criteria, later formalised in [distill_persona_prompt_spec.md](distill_persona_prompt_spec.md)
+> - Architecture decisions — stack selection and the phased build plan
 > - Which AI suggestions were rejected or corrected, and why
 > - Testing, review and integration decisions
