@@ -6,14 +6,14 @@ An autonomous publishing system that finds AI research and engineering stories, 
 
 ## System at a glance
 
-The dashboard initializes an agent and reads its audit trail. FastAPI owns the durable agent record and starts one background scheduler task per active agent. Each scheduled cycle discovers possible topics, filters and de-duplicates them using deterministic logic and long-term memory, then runs the LangGraph editorial workflow. LLM calls are confined to the editorial judge, writer/reflection-writer, and QA nodes.
+The React dashboard initializes an agent and reads its audit trail. FastAPI owns the durable agent record and starts one background scheduler task per active agent. Each scheduled cycle discovers possible topics, filters and de-duplicates them using deterministic logic and long-term memory, then runs the LangGraph editorial workflow. LLM calls are confined to the editorial judge, writer/reflection-writer, and QA nodes.
 
 For a single end-to-end diagram from dashboard initialization through scheduling, publishing, persistence, and polling, see [ARCHITECTURE_FLOW.md](ARCHITECTURE_FLOW.md).
 
 ```mermaid
 flowchart LR
-    UI["Ada Desk dashboard"] -->|"POST /init"| API["FastAPI API"]
-    UI -->|"polls feed, status, rejected\nevery 20 seconds"| API
+    UI["Static dashboard\n(HTML/Tailwind/JS)"] -->|"POST /init"| API["FastAPI API"]
+    UI -->|"syncs feed, status, rejected\non load + on action"| API
     API --> DB[("SQLite\nagents, posts, rejections, cycles")]
     API --> S["Per-agent asyncio scheduler"]
     S --> D["Discovery\nHN · arXiv · GitHub · web search"]
@@ -103,17 +103,17 @@ flowchart TD
 
 ## LLM call architecture
 
-All model calls use LangChain `ChatOpenAI` with Pydantic structured output. The provider is selected at runtime: a valid `GROQ_API_KEY` takes precedence; otherwise `OPENAI_API_KEY` is used. `LLM_MODEL` names the model, defaulting to `openai/gpt-oss-120b`, which supports JSON-schema output natively; models without it fall back to function calling automatically. Each structured call is spaced, retried up to three times for transient malformed responses, and falls through `LLM_FALLBACK_MODELS` when the primary is rate limited, since each Groq model has its own quota.
+All model calls use LangChain `ChatOpenAI` with Pydantic structured output. The provider is selected at runtime: a valid `GROQ_API_KEY` takes precedence; otherwise `OPENAI_API_KEY` is used. Defaults are `llama-3.3-70b-versatile` for Groq and `gpt-4o-mini` for OpenAI, unless `LLM_MODEL` overrides them. Models without native JSON-schema support use function calling. Each structured call retries up to three times for transient malformed structured responses.
 
 | Stage | Invocation | Input context | Structured result | Deterministic guard / route |
 | --- | --- | --- | --- | --- |
 | Startup health | 1 small call | `ping` | `LLMCheck { ok }` | Sets `/health` `canPublish`; startup continues but cycles will fail closed if unavailable. |
-| Editorial judge | 1 per evaluated topic | Persona, thresholds, candidate, recent posts | `JudgeVerdict`: five 0-5 scores, a named disqualifier, and a `writer_context` handoff | Code overrides a model `publish` when any threshold is missed, credibility is low, or the handoff is absent. |
-| Writer | 1 initial draft + up to 3 revisions | Persona voice, the judge's `writer_context`, QA feedback on revision, up to 2 hybrid-retrieved prior posts | `DraftPost` text, rationale, sources | Renders the judge's angle only; it does not read the raw source or choose a topic. |
+| Editorial judge | 1 per evaluated topic | Persona, thresholds, candidate metadata, 8 recent titles | `JudgeVerdict` scores + decision + reason | Code overrides a model `pass` if any persona threshold is missed. |
+| Writer | 1 initial draft + up to 2 revisions | Persona voice, approved source, judge rationale, QA feedback on revision, up to 2 hybrid-retrieved prior posts | `DraftPost` text + selection / timing rationale | Separates a required closing line deterministically. |
 | Reflection writer | 1 initial draft + up to 2 revisions | Persona voice, deterministically detected related post titles, QA feedback | `DraftPost` | Used only in reflection mode; no candidate discovery source is invented. |
-| QA judge | 1 per draft attempt | Draft, the judge's verified context (or prior titles for a reflection), recent posts, voice rules | `QAVerdict`: voice, grounding, repetition, plain language, single idea | Code forces `revise` for forbidden phrases, em-dashes, overlong sentences, parenthetical jargon, appended takeaways, scaffolding, lifted example wording, or length. |
+| QA judge | 1 per draft attempt | Draft, source summary (or prior titles for a reflection), 4 recent full posts, voice rules | `QAVerdict` voice / grounding / repetition flags + pass/revise feedback | Code forces `revise` for forbidden phrases, lifted example wording, or missing required closing line. |
 
-A normal topic candidate therefore uses **1–9 logical LLM calls**: judge + up to four writer calls + up to four QA calls. A reflection uses **2–8 logical calls** (writer and QA only). A deterministic pre-filter caps candidates evaluated per cycle, so a cycle costs roughly 10 judge calls rather than one per raw candidate. Retry attempts can increase provider requests up to threefold. Discovery, prefiltering, deduplication, trend detection, rejection logging, and publishing are deterministic/local operations.
+A normal topic candidate therefore uses **1–7 logical LLM calls**: judge + one to three writer calls + one to three QA calls. A reflection uses **2–6 logical calls** (writer and QA only). Retry attempts can increase provider requests up to threefold. Discovery, prefiltering, deduplication, trend detection, rejection logging, and publishing are deterministic/local operations.
 
 ### Failure semantics
 
@@ -149,7 +149,7 @@ The hybrid duplicate check accepts an exact semantic match on its own, but requi
 | `GET /api/agent/rejected?agentId=…` | Return rejection audit log | None. |
 | `GET /health` | Return service and structured-output LLM readiness | None during request. |
 
-The dashboard stores `agentId` and the selected persona in `localStorage`, and every request is scoped to that one agent. If the backend no longer recognises the stored id, the client clears it and returns to the persona gate rather than showing another agent's data. Once initialized, it concurrently polls feed, status, activity, and rejected topics every 20 seconds; manual refresh triggers the same read-only requests. A missing agent (usually after a database reset) clears local storage and returns the user to initialization.
+The static dashboard (`frontend1/ada-desk`) stores the backend agent ID in `localStorage` (`ada_backend_agent_id`), via `assets/js/agent-api.js`. It syncs feed, status, and rejected topics once on page load, and again after any action that changes state — initiating a cycle, or the manual refresh/fetch buttons on each page. A missing agent (usually after a database reset) surfaces as a failed sync and returns the user to initialization.
 
 ## Project structure
 
@@ -157,9 +157,10 @@ The dashboard stores `agentId` and the selected persona in `localStorage`, and e
 - `backend/app/core/`: settings and the persistent per-agent scheduler.
 - `backend/app/agent/`: LangGraph state machine, LLM factory, prompts, persona rules, nodes, and discovery tools.
 - `backend/app/memory/`: SQLAlchemy models, SQLite repository, embeddings, ChromaDB, hybrid retrieval, and reflection detection.
-- `frontend1/ada-desk/`: monitoring dashboard, served by a small static Node server.
+- `frontend1/ada-desk/`: active monitoring dashboard — static HTML/Tailwind/vanilla JS, served by a small Node.js server (`server.js`). Backend integration lives in `assets/js/agent-api.js`. (An earlier `frontend/` Vite + React prototype exists in the repo as a legacy reference and is not used.)
 - `backend/tests/`: API, graph, and scheduling contract tests.
 - `walkthrough.md`: live-data/API-key, scheduling, restart, and verification guide.
+- `persona-distill.md`: persona identity, voice, editorial standards, and memory behavior.
 
 ## Quick start
 
@@ -185,11 +186,11 @@ Check `http://127.0.0.1:8000/health`; `canPublish` should be `true` before expec
 ### 3. Start the dashboard
 
 ```powershell
-cd frontend1da-desk
-node server.js
+cd frontend1\ada-desk
+npm start
 ```
 
-Open `http://127.0.0.1:5173`. On first load the dashboard shows a persona gate: enter a name and pick a domain, and it calls `POST /api/agent/init` once. Every page is then bound to that agent, so the feed, rejected topics, and cycle log all belong to the persona you selected. Use **change persona** in the sidebar to switch. The backend address defaults to `http://127.0.0.1:8000/api` and can be changed on the API settings page.
+Open `http://localhost:5173`. It calls the backend at `http://127.0.0.1:8000/api` by default; the FastAPI server must be running on port 8000 (8000 is reserved for the backend, 5173 for the dashboard). To point it at a different backend or set an API key, edit `baseUrl`/`apiKey` in `assets/js/agent-api.js`. No build step is required — it's static HTML/CSS/JS; you can also open `index.html` directly or serve the folder with any static file server.
 
 ### 4. Run tests
 
