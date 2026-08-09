@@ -22,13 +22,13 @@ class VoiceGuidelines(BaseModel):
         False,
         description="If true, the draft must end with a short standalone line separated by a blank line (checked programmatically)."
     )
-    min_post_chars: int = Field(
+    min_post_words: int = Field(
         0,
-        description="Minimum body length. Guards against a post so thin it says nothing specific; checked programmatically."
+        description="Minimum body length in words. Guards against a post too thin to say anything specific; checked programmatically."
     )
-    max_post_chars: int = Field(
+    max_post_words: int = Field(
         0,
-        description="Maximum body length, 0 for unlimited. Guards against padding."
+        description="Maximum body length in words, 0 for unlimited. Guards against padding."
     )
 
 class EditorialThresholds(BaseModel):

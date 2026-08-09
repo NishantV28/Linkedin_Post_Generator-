@@ -39,8 +39,8 @@ DISTILL_PRESET = PersonaConfig(
             "Watch what gets supervised, not what gets generated."
         ),
         requires_standalone_closing_line=True,
-        min_post_chars=650,
-        max_post_chars=1300,
+        min_post_words=50,
+        max_post_words=120,
     ),
     stable_interests=[
         "cs.LG", "cs.CL", "cs.AI",
@@ -85,8 +85,8 @@ ADA_PRESET = PersonaConfig(
             "If your defence assumes the model can be retrained out of this, check that assumption."
         ),
         requires_standalone_closing_line=True,
-        min_post_chars=650,
-        max_post_chars=1300,
+        min_post_words=50,
+        max_post_words=120,
     ),
     stable_interests=[
         "prompt injection", "jailbreaking", "model alignment",

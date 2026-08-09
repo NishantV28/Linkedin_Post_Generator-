@@ -26,6 +26,17 @@ def start_cycle(state: AgentState) -> AgentState:
     state["published_post"] = None
     state["cycle_outcome"] = "in_progress"
 
+    # A reflection is about the agent's own published work, not about a discovered
+    # source. Carrying a candidate into that cycle let QA ground the reflection
+    # against an unrelated paper, and its feedback then steered the writer into
+    # rewriting the post about that paper - which was then published under a
+    # "Reflection" title with the sources of three unrelated posts attached.
+    if state.get("mode") == "reflection":
+        state["current_candidate"] = None
+        state["candidates"] = []
+        logger.info("Starting reflection cycle - no discovery candidate is used.")
+        return state
+
     candidates = state.get("candidates", [])
     if candidates:
         state["current_candidate"] = candidates[0]

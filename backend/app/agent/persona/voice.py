@@ -21,6 +21,42 @@ def _words(text: str) -> List[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
+# Wording that shows the writer has narrated its own instructions instead of following
+# them - naming the structural beats, or repeating the plain-language test back as prose.
+# Naming a beat ("The obvious claim is...") or addressing the instructions themselves
+# ("a smart reader with no background...") is scaffolding. Ordinary connective prose
+# like "The mechanism:" or "The catch:" is NOT - the persona's own worked example uses
+# it, and flagging it made the writer unable to satisfy the example and the guard at
+# the same time, so every candidate burned its revisions and nothing published.
+SCAFFOLDING_PATTERNS = [
+    re.compile(r"\bthe obvious claim\b", re.I),
+    re.compile(r"\bthe turn is\b", re.I),
+    re.compile(r"\bthe takeaway line\b", re.I),
+    re.compile(r"\ba smart (?:reader|adult)\b", re.I),
+    re.compile(r"\bwith no background in this\b", re.I),
+    re.compile(r"\bstandalone takeaway\b", re.I),
+    re.compile(r"\bin plain (?:language|english)\b", re.I),
+    re.compile(r"\bcasual reader would assume\b", re.I),
+]
+
+
+def scaffolding_leaks(draft: str) -> List[str]:
+    """
+    Phrases where the draft describes its own structure rather than just having it.
+
+    Models handed a numbered structure will sometimes emit the beat names as headings
+    ("The obvious claim is...", "The mechanism:"), and one draft repeated the
+    plain-language instruction itself back as a sentence. The reader should see the
+    shape, never the scaffolding.
+    """
+    found = []
+    for pattern in SCAFFOLDING_PATTERNS:
+        match = pattern.search(draft or "")
+        if match:
+            found.append(match.group(0).strip())
+    return found
+
+
 def borrowed_phrases(draft: str, example: str, min_run: int = MIN_BORROWED_RUN_WORDS) -> List[str]:
     """
     Word runs the draft has lifted verbatim from the persona's worked example.

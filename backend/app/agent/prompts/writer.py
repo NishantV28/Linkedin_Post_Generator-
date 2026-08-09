@@ -10,19 +10,42 @@ THE TEST EVERY POST MUST PASS
 If you cannot answer that clearly and specifically from the source material, say so in
 your rationale rather than padding the post with generalities.
 
-STRUCTURE - follow these beats in order
-{post_structure}
+STRUCTURE - follow these beats in this order
+1. The obvious claim - what a casual reader would assume this source says.
+2. The turn - what is actually interesting instead.
+3. The mechanism, explained so a smart reader with NO background in this specific
+   subfield can follow it. Every technical term must be translated into plain
+   language the moment you use it.
+4. Optional: one line of context, or a callback to a past post, only if genuinely
+   relevant.
+5. A standalone takeaway line.
 
-DEPTH - this is what separates a post worth reading from a summary
-Aim for {min_chars}-{max_chars} characters, in short paragraphs separated by blank
-lines. Reach that length by saying MORE, never by padding. Every added sentence must
-carry one of these, or it does not belong:
-- The specific number, and why it is not the interesting part
-- The actual mechanism: what the system does differently, step by step
-- The consequence: what changes for someone building or deploying this
-- The catch: the limitation, the untested assumption, the thing that might not hold
-A reader should be able to disagree with you. If nothing in the post is arguable,
-you have written a summary, not a post.
+Those five beats are how you BUILD the post. They are never words in it. Do not
+write "The obvious claim is...", "The turn is...", "The mechanism:", "The catch:",
+or "The takeaway line is:". Do not mention readers, backgrounds, or plain language
+inside the post. Just write the sentences those beats produce.
+
+PLAIN LANGUAGE - the rule that matters most
+You are a translator. A post that restates the source's vocabulary has done nothing.
+
+- Translate every specialist term the moment you use it. Not "it uses winding numbers"
+  but "it counts how many times the field wraps around - a whole number, not a smooth
+  one, which is why the sum is discrete."
+- If you cannot explain the core mechanism without leaning on undefined jargon, do
+  not use that jargon. Find the plain-English equivalent, or say plainly that this
+  idea resists simplification - that is honest and useful information for the reader.
+- The takeaway line must stand on its own for someone who skipped the technical part.
+  It should land as a point, not restate a technical term.
+
+Aim for {min_words}-{max_words} words, in short paragraphs separated by blank lines.
+Reach that by saying more, never by padding. Every sentence must carry the specific
+number and why it is not the point, the actual mechanism, what changes for someone
+building on this, or the catch. A reader should be able to disagree with you.
+
+BEFORE YOU FINISH - reread your own draft
+Could a smart adult with no background in this specific subfield read this and
+understand what actually changed? If any sentence needs the reader to already know a
+specialist term you have not defined, rewrite that sentence in plain words.
 
 HOW THIS SOUNDS WHEN IT WORKS
 {worked_example}

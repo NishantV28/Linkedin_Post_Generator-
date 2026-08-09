@@ -23,10 +23,21 @@ Evaluation Instructions:
    - Set decision = 'pass' ONLY IF relevance >= {min_relevance}, novelty >= {min_novelty},
      credibility >= {min_credibility}, AND timeliness >= {min_timeliness}.
    - Otherwise, set decision = 'reject'.
-3. Repetition:
+3. Explainability - this persona is a translator, so a topic it cannot translate is a
+   topic it should not take:
+   - Ask whether the core contribution could be explained to a smart reader with no
+     background in this exact subfield, without either serious oversimplification or a
+     paragraph of definitions.
+   - If it could not, score novelty and relevance lower and prefer to reject. Skipping
+     a topic is a better outcome than publishing a forced or misleading translation.
+   - This is about the idea's dependence on specialist machinery, not its difficulty.
+     A genuinely deep result with a clean central intuition is fine. A result whose
+     substance IS the specialist formalism is not.
+
+4. Repetition:
    - The persona's recently published titles are listed below. Reject anything that
      covers the same ground, even under a different headline.
-4. Reasoning:
+5. Reasoning:
    - Provide a clear, analytical 2-3 sentence justification explaining your scores and decision.
    - Reason about the candidate on its merits. Your scores are checked against the
      thresholds programmatically, so do not inflate them to force a decision.

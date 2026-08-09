@@ -1,7 +1,11 @@
 import logging
 from backend.app.agent.state import AgentState, QAVerdict
 from backend.app.agent.llm import get_structured_llm
-from backend.app.agent.persona.voice import borrowed_phrases, has_standalone_closing_line
+from backend.app.agent.persona.voice import (
+    borrowed_phrases,
+    has_standalone_closing_line,
+    scaffolding_leaks,
+)
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.repository import MemoryRepository
 from backend.app.agent.prompts.qa_judge import (
@@ -45,9 +49,12 @@ def qa_judge_node(state: AgentState) -> AgentState:
         logger.warning("Missing draft in qa_judge_node.")
         return state
 
-    # A reflection post has no source candidate; its claims must instead be grounded
-    # in the agent's own published history, so that is what QA checks against.
-    if cand is not None:
+    # Grounding is chosen by the cycle's mode, not by whether a candidate happens to
+    # be present. Preferring the candidate meant a reflection could be graded against
+    # an unrelated paper, and QA feedback then pushed the writer into covering it.
+    is_reflection = state.get("mode") == "reflection"
+
+    if cand is not None and not is_reflection:
         grounding = cand.summary
         subject = cand.title
     elif trend:
@@ -111,17 +118,26 @@ def qa_judge_node(state: AgentState) -> AgentState:
                 f"about this specific source"
             )
 
-        length = len(draft.text.strip())
-        if voice.min_post_chars and length < voice.min_post_chars:
+        leaks = scaffolding_leaks(draft.text)
+        if leaks:
+            quoted = "; ".join(f'"{l}"' for l in leaks[:3])
             problems.append(
-                f"is too thin at {length} characters (target {voice.min_post_chars}-"
-                f"{voice.max_post_chars}). Add the specific mechanism, the consequence for "
-                f"someone building on this, or the limitation - not more adjectives"
+                f"narrates its own structure ({quoted}). The beats are how you build the "
+                f"post, not words to write down - the reader should never see them. Say the "
+                f"thing itself instead of announcing which beat you are on"
             )
-        elif voice.max_post_chars and length > voice.max_post_chars:
+
+        words = len(draft.text.split())
+        if voice.min_post_words and words < voice.min_post_words:
             problems.append(
-                f"runs long at {length} characters (target {voice.min_post_chars}-"
-                f"{voice.max_post_chars}). Cut whichever paragraph carries the least new information"
+                f"is too thin at {words} words (target {voice.min_post_words}-"
+                f"{voice.max_post_words}). Add the mechanism in plain language, what it "
+                f"changes for someone building on this, or the catch - not more adjectives"
+            )
+        elif voice.max_post_words and words > voice.max_post_words:
+            problems.append(
+                f"runs long at {words} words (target {voice.min_post_words}-"
+                f"{voice.max_post_words}). Cut whichever paragraph carries the least new information"
             )
 
         if voice.requires_standalone_closing_line and not has_standalone_closing_line(draft.text):
@@ -135,9 +151,19 @@ def qa_judge_node(state: AgentState) -> AgentState:
             verdict.verdict = "revise"
             verdict.feedback = "Draft " + "; also ".join(problems) + "."
 
+        # Plain language is a hard gate: this persona's entire value is translation, so
+        # an untranslated post has failed even when everything else is correct.
+        if not verdict.plain_language_clear and verdict.verdict.lower() == "pass":
+            verdict.verdict = "revise"
+            verdict.feedback = (
+                "Draft uses specialist language a general reader cannot follow. "
+                + (verdict.feedback or "")
+            ).strip()
+
         logger.info(
             f"QA Judge Verdict: {verdict.verdict.upper()} "
-            f"(Voice={verdict.voice_consistent}, Grounded={verdict.factually_grounded}, NonRep={verdict.non_repetitive})"
+            f"(Voice={verdict.voice_consistent}, Grounded={verdict.factually_grounded}, "
+            f"NonRep={verdict.non_repetitive}, PlainLanguage={verdict.plain_language_clear})"
         )
 
         state["qa_verdict"] = verdict

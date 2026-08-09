@@ -108,13 +108,11 @@ def test_qa_judge_node_eval():
                 "in device memory, the runtime keeps a working set and streams the rest "
                 "from host RAM on demand. Throughput barely moves, but the memory ceiling "
                 "stops being a hard wall.\n\n"
-                "That shifts who can run this. A 70B model on a single 24GB card was a "
-                "packaging problem before, not a compute one. If the streaming path holds "
-                "up under batch load, a lot of deployments that were priced out of "
-                "multi-GPU boxes become viable on one.\n\n"
-                "The unanswered part is contention. Every benchmark in the notes is "
-                "single-request. Nobody has shown what happens when eight sessions fight "
-                "over the same host bandwidth.\n\n"
+                "That shifts who can run this. A 70B model on one 24GB card was a "
+                "packaging problem, not a compute one.\n\n"
+                "The unanswered part is contention. Every benchmark here is "
+                "single-request, and nobody has shown what happens when eight sessions "
+                "fight over the same host bandwidth.\n\n"
                 "Memory ceilings are a scheduling problem now, not a hardware one."
             ),
             rationale_selected="Relevant",
@@ -126,6 +124,7 @@ def test_qa_judge_node_eval():
         voice_consistent=True,
         factually_grounded=True,
         non_repetitive=True,
+        plain_language_clear=True,
         verdict="pass",
         feedback="Looks good."
     )
@@ -199,6 +198,7 @@ def test_qa_judge_enforces_persona_structure():
         voice_consistent=True,
         factually_grounded=True,
         non_repetitive=True,
+        plain_language_clear=True,
         verdict="pass",
         feedback="Looks good."
     )
@@ -253,6 +253,7 @@ def test_qa_judge_rejects_wording_copied_from_the_style_example():
 
     approving_verdict = QAVerdict(
         voice_consistent=True, factually_grounded=True, non_repetitive=True,
+        plain_language_clear=True,
         verdict="pass", feedback="Looks good."
     )
 

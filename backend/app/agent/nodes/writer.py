@@ -82,8 +82,8 @@ def writer_node(state: AgentState) -> AgentState:
             signature_tell=voice.signature_tell or "None",
             stable_interests=", ".join(persona.stable_interests) or "None",
             forbidden_phrases=forbidden_str,
-            min_chars=voice.min_post_chars or 400,
-            max_chars=voice.max_post_chars or 1300,
+            min_words=voice.min_post_words or 50,
+            max_words=voice.max_post_words or 120,
             few_shot_context=few_shot_context
         )
 

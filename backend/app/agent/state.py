@@ -23,6 +23,14 @@ class QAVerdict(BaseModel):
     voice_consistent: bool = Field(..., description="True if draft matches tone, rhythm, and avoids forbidden words")
     factually_grounded: bool = Field(..., description="True if claims are grounded in source candidate summary")
     non_repetitive: bool = Field(..., description="True if draft avoids repeating recent memory posts")
+    plain_language_clear: bool = Field(
+        ...,
+        description=(
+            "True only if a smart reader with no background in this specific subfield could "
+            "follow what changed. False if any specialist term is used without being translated "
+            "the moment it appears, or if the closing line only makes sense to a specialist."
+        )
+    )
     verdict: str = Field(..., description="'pass' to publish, or 'revise' to request a writer retry")
     feedback: str = Field(..., description="Specific feedback to guide revision if verdict is 'revise'")
 
