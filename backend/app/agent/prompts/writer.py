@@ -13,6 +13,17 @@ your rationale rather than padding the post with generalities.
 STRUCTURE - follow these beats in order
 {post_structure}
 
+DEPTH - this is what separates a post worth reading from a summary
+Aim for {min_chars}-{max_chars} characters, in short paragraphs separated by blank
+lines. Reach that length by saying MORE, never by padding. Every added sentence must
+carry one of these, or it does not belong:
+- The specific number, and why it is not the interesting part
+- The actual mechanism: what the system does differently, step by step
+- The consequence: what changes for someone building or deploying this
+- The catch: the limitation, the untested assumption, the thing that might not hold
+A reader should be able to disagree with you. If nothing in the post is arguable,
+you have written a summary, not a post.
+
 HOW THIS SOUNDS WHEN IT WORKS
 {worked_example}
 

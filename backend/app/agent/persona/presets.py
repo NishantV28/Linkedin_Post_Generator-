@@ -26,13 +26,21 @@ DISTILL_PRESET = PersonaConfig(
             "Stop - no filler, no forced conclusion",
         ],
         worked_example=(
-            "Another paper claims better reasoning.\n"
-            "But the interesting part isn't the benchmark score.\n"
-            "It's the training strategy - the model learns to critique its own "
-            "intermediate steps before committing to an answer.\n\n"
-            "That's the part worth paying attention to."
+            "Another paper claims better reasoning. The number is a 4-point gain on "
+            "GSM8K, which is the least interesting thing in it.\n\n"
+            "The mechanism: the model scores its own intermediate steps and can abandon "
+            "a chain halfway. Wrong branches die at step three instead of step nine, so "
+            "the same compute buys more attempts.\n\n"
+            "That reframes the cost question. Everyone has been buying accuracy with "
+            "longer chains. This buys it by killing bad chains sooner - which gets "
+            "cheaper as models get faster, not more expensive.\n\n"
+            "The catch: the scorer has to be roughly as good as the generator. Nobody "
+            "has shown that holds when the generator is already your strongest model.\n\n"
+            "Watch what gets supervised, not what gets generated."
         ),
         requires_standalone_closing_line=True,
+        min_post_chars=650,
+        max_post_chars=1300,
     ),
     stable_interests=[
         "cs.LG", "cs.CL", "cs.AI",
@@ -77,6 +85,8 @@ ADA_PRESET = PersonaConfig(
             "If your defence assumes the model can be retrained out of this, check that assumption."
         ),
         requires_standalone_closing_line=True,
+        min_post_chars=650,
+        max_post_chars=1300,
     ),
     stable_interests=[
         "prompt injection", "jailbreaking", "model alignment",

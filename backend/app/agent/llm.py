@@ -12,6 +12,11 @@ logger = logging.getLogger("autonomous_agent.agent.llm")
 # with a 400, which previously surfaced as fabricated editorial rejections.
 JSON_SCHEMA_MODEL_PREFIXES = ("openai/gpt-oss", "gpt-4", "gpt-5", "o1", "o3")
 
+# Fallback when LLM_MODEL is unset. Deliberately not a llama model: those need tool
+# calling instead of json_schema, fail it roughly 1 time in 3, and score candidates
+# more leniently than the thresholds in the persona presets assume.
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+
 # Attempts per structured-output call, covering transient malformed tool calls.
 STRUCTURED_OUTPUT_ATTEMPTS = 3
 
@@ -93,7 +98,7 @@ def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatO
     openai_api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY")
 
     if groq_api_key and groq_api_key != "your_groq_api_key_here":
-        selected_model = model_name or settings.LLM_MODEL or "llama-3.3-70b-versatile"
+        selected_model = model_name or settings.LLM_MODEL or DEFAULT_GROQ_MODEL
         base_url = settings.LLM_BASE_URL or "https://api.groq.com/openai/v1"
         logger.info(f"Initializing Groq ChatOpenAI client (Model: {selected_model})")
         return ChatOpenAI(

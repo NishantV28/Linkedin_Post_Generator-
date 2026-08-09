@@ -102,10 +102,20 @@ def test_qa_judge_node_eval():
         # override the mocked verdict.
         "draft": DraftPost(
             text=(
-                "The headline number here is a two-point gain on a reasoning suite.\n"
-                "What actually moved is the sampling budget: verification runs on every "
-                "partial trace, so wrong branches die early instead of at the end.\n\n"
-                "Cheaper supervision, not a bigger model."
+                "The release notes lead with a 12% latency drop, which is the least "
+                "useful number here.\n\n"
+                "What changed is where the KV cache lives. Instead of holding every layer "
+                "in device memory, the runtime keeps a working set and streams the rest "
+                "from host RAM on demand. Throughput barely moves, but the memory ceiling "
+                "stops being a hard wall.\n\n"
+                "That shifts who can run this. A 70B model on a single 24GB card was a "
+                "packaging problem before, not a compute one. If the streaming path holds "
+                "up under batch load, a lot of deployments that were priced out of "
+                "multi-GPU boxes become viable on one.\n\n"
+                "The unanswered part is contention. Every benchmark in the notes is "
+                "single-request. Nobody has shown what happens when eight sessions fight "
+                "over the same host bandwidth.\n\n"
+                "Memory ceilings are a scheduling problem now, not a hardware one."
             ),
             rationale_selected="Relevant",
             rationale_why_now="Now"
@@ -223,9 +233,18 @@ def test_qa_judge_rejects_wording_copied_from_the_style_example():
         "current_candidate": cand,
         "draft": DraftPost(
             text=(
-                "Another paper claims efficient MoE inference. But the interesting part "
-                "isn't the benchmark score. It's the lossless compression strategy.\n\n"
-                "That's the part worth paying attention to."
+                "A new decoding paper landed this week and the framing is familiar.\n\n"
+                "The mechanism: the model scores its own intermediate steps and can "
+                "abandon a chain halfway. The authors report this on three benchmarks "
+                "with consistent gains, and the implementation is a few hundred lines on "
+                "top of a standard sampler.\n\n"
+                "What that buys you is fewer wasted tokens per solved problem, which "
+                "matters more for cost than for accuracy. The reported numbers are modest "
+                "but the direction is clear enough that it is worth watching whether it "
+                "survives contact with the larger models people actually deploy.\n\n"
+                "The open question is whether the scorer stays reliable once the "
+                "generator is stronger than it is, which nobody has demonstrated yet.\n\n"
+                "Cheaper supervision beats a bigger model."
             ),
             rationale_selected="Relevant",
             rationale_why_now="Now"

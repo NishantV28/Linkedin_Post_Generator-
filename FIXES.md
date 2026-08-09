@@ -478,17 +478,6 @@ Groq's free tier returned 429s while evaluating 22 candidates in one cycle.
 
 - [x] Added `get_rejected_topics` to `MemoryRepository`
 
-### P2-9. Dashboard shows the wrong persona
-
-The sidebar renders `DEFAULT_PERSONA`, hardcoded in [App.jsx](frontend/src/App.jsx) — bio *"following the stories that matter before they become consensus"* with tags `prompt injection`, `supply chain`, `red-teaming`, `evaluation`. Those are AI-security interests, closer to Ada than to Distill.
-
-So the header describes a security desk while the feed beneath it publishes AI-research posts. It is the first thing a judge assessing **persona consistency** sees, and it contradicts everything below it. `/status` returns only name, domain, active and cycle count, so the frontend has nothing real to render.
-
-- [ ] Return the persona's `bio` and `stable_interests` from `/status`
-- [ ] Render those instead of the frontend's own constants
-
----
-
 ### P2-8. Console encoding ✅ DONE
 
 Post text contains `U+202F` and curly quotes; printing to a Windows cp1252 console raises `UnicodeEncodeError`. The JSON API is unaffected — this only breaks the local scripts.
@@ -597,30 +586,23 @@ Judging criterion: **autonomous operation after initialization**.
 
 ## Suggested order
 
-### Completed
-
-`P0-2` retry counter · `P0-3` dedup threshold · `P0-4` stale content · `P0-5` arXiv ·
-`P0-6` cadence config · `P1-1` thresholds · `P1-2` persona voice · `P1-3` memory in judges ·
-`P1-4` rationale · `P1-5` fail-closed · `P1-6` rejection log · `P2-3` feed 404 ·
-`P2-5` rate limits · `P2-7` harness · `P2-8` encoding · `A-2` memory behaviours ·
-`A-4` pre-filter · `A-6` startup self-check
-
-23 tests passing.
-
-### Remaining
-
 | # | Work | Why in this position |
 |---|---|---|
-| **1** | **S0-1** — fill the `TO COMPLETE` sections in [AI_USAGE_LOG.md](AI_USAGE_LOG.md) | Stage 1 pass/fail. **Your action only** — the tool and prompts used in Phases 1-5 cannot be written by anyone else, and an unfilled log is worse than a short one. Quality is irrelevant if the submission is never scored. |
-| **2** | **S0-2** + **P2-6** — deploy to an always-on host | Stage 1 pass/fail, and the only item that needs *elapsed time* rather than work: it has to stay up for the full window. Includes the `Dockerfile` `PYTHONPATH` fix, an embedding-model prefetch layer, and a persistent volume. |
-| **3** | **P2-4** — run the first cycle ~60-120s after init | An evaluator polling in the first hour currently sees an empty feed, because the first cycle is 2.5-4.5h away. Small change, disproportionate effect on the "autonomous publishing" impression. |
-| **4** | **P2-9** — serve the real persona to the dashboard | The sidebar currently contradicts the feed. First thing seen when assessing persona consistency. |
-| **5** | **P2-2** — persona/domain mismatch on arbitrary init | The brief's own example inits with `{"name": "Ada", "domain": "AI Security"}`. If the evaluator uses a persona that matches no preset, Distill's `cs.LG` interests drive discovery while the agent claims another identity. |
-| **6** | **A-3** — visible editorial restraint | *"Skipped two papers this round — both were bigger models with the same trick."* Puts judgment in the feed itself, not only in a debug endpoint. Specified in the persona doc, unbuilt. |
-| **7** | **P0-6 docs** + **P2-1** discovery polish | [walkthrough.md](walkthrough.md) still documents the cadence behaviour that was fixed; HN summaries are still thin; the web query still leads with "latest". |
-| **8** | **A-1** drift guard · **A-5** post variety · **A-4** corroboration | Genuine polish. Worth doing only if 1-5 are complete and the deployment is soaking. |
-
-> **Items 1 and 2 are the only ones that can disqualify the submission.** Everything below them affects score, not eligibility. If time is short, do those two and stop.
+| ✅ | ~~**P0-2** retry counter~~ | done — was silently burning whole cycles |
+| ✅ | ~~**P0-3** dedup threshold~~ | done — was stalling the feed over time |
+| ✅ | ~~**P2-7** + **P2-8**~~ | done — a full cycle now runs and prints end-to-end |
+| **1** | **S0-1** AI Usage Log | Removes a disqualification risk for ~30 min of work. Outranks everything else — quality is irrelevant if the submission is never scored. |
+| ✅ | ~~**P1-2** writer prompt~~ | done — the persona doc now drives the writer and QA judge |
+| ✅ | ~~**P1-1** + **P1-3**~~ | done — thresholds enforced, memory wired into both judges |
+| ✅ | ~~**P0-5** arXiv~~ | done — found while diagnosing an empty feed; the single most consequential defect |
+| ✅ | ~~**P1-6** + **P1-4** + **P1-5**~~ | done — rejection log is trustworthy, rationale cites alternatives, API errors no longer masquerade as editorial decisions |
+| **5** | **S0-1** fill in the AI log placeholders, then **S0-2** deploy | ← *next*. Both are Stage 1 pass/fail and deployment needs soak time |
+| ✅ | ~~**A-4** cheap pre-filter~~ | done — 63% fewer LLM calls, which restored the stricter model |
+| **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
+| **5** | **P0-4** recency filter | Stops stale content being published as news |
+| **6** | **A-2** callbacks + topic spacing | The memory differentiator most submissions will lack |
+| **7** | **S0-2** deploy + **A-6** startup self-check | Stage 1 requirement; needs soak time before the real run |
+| **8** | **P1-5** fail-closed, **A-1** drift guard, **A-4** corroboration | Polish if time remains |
 
 ---
 

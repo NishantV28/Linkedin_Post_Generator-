@@ -111,6 +111,19 @@ def qa_judge_node(state: AgentState) -> AgentState:
                 f"about this specific source"
             )
 
+        length = len(draft.text.strip())
+        if voice.min_post_chars and length < voice.min_post_chars:
+            problems.append(
+                f"is too thin at {length} characters (target {voice.min_post_chars}-"
+                f"{voice.max_post_chars}). Add the specific mechanism, the consequence for "
+                f"someone building on this, or the limitation - not more adjectives"
+            )
+        elif voice.max_post_chars and length > voice.max_post_chars:
+            problems.append(
+                f"runs long at {length} characters (target {voice.min_post_chars}-"
+                f"{voice.max_post_chars}). Cut whichever paragraph carries the least new information"
+            )
+
         if voice.requires_standalone_closing_line and not has_standalone_closing_line(draft.text):
             problems.append(
                 "does not end with a standalone closing line. The final line must be a "

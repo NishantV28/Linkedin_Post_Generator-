@@ -22,6 +22,14 @@ class VoiceGuidelines(BaseModel):
         False,
         description="If true, the draft must end with a short standalone line separated by a blank line (checked programmatically)."
     )
+    min_post_chars: int = Field(
+        0,
+        description="Minimum body length. Guards against a post so thin it says nothing specific; checked programmatically."
+    )
+    max_post_chars: int = Field(
+        0,
+        description="Maximum body length, 0 for unlimited. Guards against padding."
+    )
 
 class EditorialThresholds(BaseModel):
     min_relevance: float = Field(7.0, ge=1.0, le=10.0, description="Minimum relevance score (1-10)")

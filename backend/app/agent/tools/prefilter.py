@@ -28,6 +28,10 @@ MAX_CANDIDATE_AGE_DAYS = 30
 # Upper bound on candidates evaluated per cycle, so token cost stays predictable.
 MAX_CANDIDATES_PER_CYCLE = 10
 
+# Largest share of one cycle's evaluations any single source may take, so the
+# highest-scoring source cannot crowd every other one out.
+MAX_SHARE_PER_SOURCE = 0.7
+
 # A summary shorter than this gives the writer nothing concrete to work with, which
 # is where hallucinated detail comes from.
 MIN_SUMMARY_CHARS = 60
@@ -41,6 +45,12 @@ SOURCE_CREDIBILITY_CEILING = {
     "hn": 7.0,
     "web": 6.0,
 }
+
+# Discussion volume at which a submission counts as community-vetted, and the ceiling
+# it then earns. Chosen so a genuinely debated story can clear a research persona's
+# credibility bar while an ordinary link cannot.
+HIGH_ENGAGEMENT_POINTS = 100
+HIGH_ENGAGEMENT_CEILING = 8.0
 
 # Self-posts asking the community a question are discussion, not a contribution.
 LOW_VALUE_TITLE_PATTERNS = (
@@ -64,11 +74,24 @@ def _parse_published(value: Optional[str]) -> Optional[datetime]:
 
 def _credibility_ceiling(candidate: TopicCandidate) -> float:
     ceiling = SOURCE_CREDIBILITY_CEILING.get(candidate.source, 6.0)
+
     # An arXiv link posted to HN is still an arXiv paper.
     if candidate.source == "hn" and "arxiv.org" in (candidate.url or ""):
         ceiling = max(ceiling, SOURCE_CREDIBILITY_CEILING["arxiv"])
+
+    # Heavily discussed submissions have been scrutinised by a technical audience,
+    # which is a real credibility signal - and it is what makes a source worth
+    # reacting to rather than summarising. Without this, a 169-point thread with 73
+    # comments is capped at the same 7.0 as a link nobody opened, and is filtered out
+    # before the editorial judge ever sees it.
+    if candidate.engagement >= HIGH_ENGAGEMENT_POINTS:
+        ceiling = max(ceiling, HIGH_ENGAGEMENT_CEILING)
+
+    # A request for help or endorsement is discussion, not a contribution, however
+    # popular it is - so this is applied last and wins.
     if any(p.search(candidate.title or "") for p in LOW_VALUE_TITLE_PATTERNS):
         ceiling = min(ceiling, 5.0)
+
     return ceiling
 
 
@@ -114,7 +137,24 @@ def prefilter_candidates(
         survivors.append(cand)
 
     survivors.sort(key=lambda c: _rank_score(c, now), reverse=True)
-    selected = survivors[:limit]
+
+    # Reserve room for other sources. arXiv scores highest on credibility, so a plain
+    # top-N takes ten papers and never shows the judge a well-discussed thread - the
+    # feed then reads as a paper digest rather than a persona following a field.
+    # Fill up to the per-source cap first, then top up from whatever is left.
+    per_source_cap = max(1, int(limit * MAX_SHARE_PER_SOURCE))
+    selected, overflow, counts = [], [], {}
+    for cand in survivors:
+        if counts.get(cand.source, 0) < per_source_cap:
+            counts[cand.source] = counts.get(cand.source, 0) + 1
+            selected.append(cand)
+        else:
+            overflow.append(cand)
+        if len(selected) == limit:
+            break
+
+    if len(selected) < limit:
+        selected.extend(overflow[: limit - len(selected)])
 
     logger.info(
         "Pre-filter: %d candidates -> %d evaluated "
