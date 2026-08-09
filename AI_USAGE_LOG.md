@@ -21,7 +21,19 @@ Repository: <https://github.com/NishantV28/Linkedin_Post_Generator->
 | Tool | Used for | Phases |
 |---|---|---|
 | *TO COMPLETE — e.g. Claude Code / Cursor / ChatGPT* | Initial design and phased implementation | 1–5 |
-| Claude Code (Claude Opus 5) | Codebase review, defect diagnosis, fixes, verification | Part 2 |
+| Claude Code (Claude Opus 5) | Codebase review, defect diagnosis, fixes, verification, judge/writer refactor, dashboard connection | Part 2 |
+
+## Summary of AI-assisted work
+
+| | |
+|---|---|
+| Commits in Part 2 | 7 (`31ab818` … `4fd20b0`) |
+| Defects found and fixed | 20+, recorded in [FIXES.md](FIXES.md) |
+| Automated tests | 23 → **33 passing** |
+| Most consequential find | arXiv had never returned a candidate; every post came from forum headlines rather than papers |
+| Largest refactor | Editorial judgment split from writing, per the author's specification |
+
+**The recurring defect pattern** was worth naming on its own: something failed, the failure was caught, and the code substituted something that looked normal. A failed API call became an editorial rejection. A broken source became an empty list. A lost counter became "keep retrying". A quality check that errored became an approval. Individually each is a reasonable-looking `try/except`; together they made a system that could fail completely while appearing to work. Most of Part 2 is making failures look like failures.
 
 ---
 
@@ -142,13 +154,63 @@ Two dependencies listed in `requirements.txt` (`sqlalchemy`, `langchain-openai`)
 
 `MemoryRepository.get_rejected_topics` was called by the test harness but never defined, crashing the script after printing results. Windows consoles default to cp1252 and could not encode the typographic characters in generated posts, raising `UnicodeEncodeError` mid-output. Both fixed so a full cycle prints end to end.
 
-### 2.7 Verification
+### 2.7 Fix P0-5 — arXiv had never returned a single candidate
 
-All 17 existing tests pass after every change. End-to-end live run: 22 candidates discovered → 22 survived dedup → 7 rejected with substantive scored reasoning → 1 published with rationale and sources. Feed contract confirmed: HTTP 200, reverse-chronological, ISO 8601 UTC timestamps, unique ids.
+**Commit `66b7fdb`.** Distill is an AI-research persona whose primary source is arXiv. The tool requested `http://export.arxiv.org`; arXiv answers plain HTTP with a 301 to HTTPS, and `httpx` does not follow redirects by default. The response body was empty, the non-200 logged a warning nobody read, and the function returned `[]`.
 
-### 2.8 Outstanding work
+**Every post the agent had written to that point came from Hacker News headlines, GitHub blurbs or scraped web results. Not one came from a paper.** It also explained why almost nothing cleared the editorial bar once thresholds were enforced: a pool of forum threads genuinely cannot reach a research persona's credibility standard.
 
-Recorded in [FIXES.md](FIXES.md), including the persona-voice gap (the writer prompt does not use the persona design document), unenforced editorial thresholds, memory not read by the judges, and deployment hardening.
+### 2.8 Editorial standards, memory and persona voice
+
+**Commit `66b7fdb`.**
+
+- **Thresholds enforced in code.** The judge previously returned scores and a decision, and the decision was trusted. A model scoring a candidate below the bar while saying "pass" is now overruled, with the failing dimension recorded in the rejection reason.
+- **Memory wired into both judges.** Both were being handed the literal string `"None in memory."`, so the anti-repetition check compared each draft against nothing.
+- **Persona voice reached the model for the first time.** The writer prompt opened with "you are a thought leader", the register the persona was explicitly designed against, and `signature_tell` was populated in the presets but referenced nowhere in the codebase.
+
+### 2.9 Cost control and model handling
+
+**Commits `19bd910`, `d4c82a6`.** Groq's free tier allows 200,000 tokens per day. At roughly one editorial call per candidate the agent consumed about 29k per cycle, which forced a switch to a weaker model that **measurably degraded editorial judgment** — on the same Hacker News post, `gpt-oss-120b` scored credibility 5-6 and rejected it while `llama-3.3-70b` scored 8 and published it.
+
+A deterministic pre-filter now drops candidates the persona's own thresholds already exclude before any LLM call: stale, thin-summary, or below the source evidence ceiling, capped per cycle with a per-source share limit. **LLM calls per cycle fell from 27 to 10**, which let the stricter model be restored rather than trading quality for quota.
+
+Measuring it surfaced two further defects: Hacker News was returning stories up to **5,717 days old** (Algolia's relevance search has no date bound), and arXiv fetched too few papers for enough on-topic candidates to survive filtering.
+
+Also added: a fallback model chain, request timeouts, and spacing between calls. Verified across four routing cases — a rate limit skips straight to the fallback without wasting retries, a malformed tool call retries on the same model, and total exhaustion still fails honestly.
+
+### 2.10 Failure handling and self-noticing memory
+
+**Commits `31ab818`, `155a4e4`.**
+
+A rate limit during testing exposed the most dangerous failure mode in the project: **24 consecutive HTTP 429s were each recorded as an editorial rejection with fabricated 1/10 scores.** The feed was empty and the public rejection log was full of API errors that read like editorial decisions. Infrastructure failure is now distinguished from editorial judgment, and the cycle aborts honestly rather than fabricating verdicts.
+
+Memory was extended beyond deduplication: topic spacing defers candidates that echo the previous post, previously rejected URLs are skipped before any LLM call, and the agent occasionally publishes a reflection on a pattern in its own coverage. That pattern is **detected deterministically from post embeddings** rather than asked of the model, since a model asked whether it notices a trend always says yes.
+
+A startup check now proves the configured model can return structured output and reports it on `/health` as `canPublish` — the failure that twice produced an empty feed with no error.
+
+### 2.11 Judge/writer split
+
+**Commit `ad7eb41`.** Implemented against a specification written by the author ([distill_persona_prompt_spec.md](distill_persona_prompt_spec.md)).
+
+The editorial judge now decides what deserves publishing and hands the writer a settled angle: obvious assumption, interesting turn, core claim, mechanism, verified evidence, limitations, why-now and sources. The writer renders that context and no longer reads the raw source or chooses its own angle.
+
+That boundary fixed a defect found by reviewing a published post: a reflection had carried a discovery candidate into its cycle, so QA graded it against an unrelated physics paper, and QA's feedback then steered the writer into rewriting the post about that paper — which published under a "Reflection" title with three unrelated source URLs attached.
+
+Scoring moved to five dimensions on 0-5 with eleven named disqualifiers, enforced in Python. Deterministic voice rules now cover em-dashes, sentence length, parenthetical jargon glosses, appended takeaways, structural scaffolding leaking into prose, and wording copied from the style example.
+
+### 2.12 Dashboard connection
+
+**Commit `ad7eb41`.** A persona gate initialises one agent from a name and domain, and every page binds to that agent. The previous adapter fell back to whichever agent the backend listed first, so the dashboard could display a different persona's feed than the one selected. A stale agent id now clears storage and returns to the gate rather than dead-ending on a 404.
+
+### 2.13 Verification
+
+**33 automated tests pass.** Live runs confirmed: pre-filter reducing 32 candidates to 10, the editorial judge producing specific disqualifiers (`pure_announcement`, `off_topic`, `insufficient_detail`, `opinion_no_evidence`) against real candidates, and the full API contract — HTTP 200, reverse-chronological, ISO 8601 UTC timestamps, unique ids.
+
+**Not verified:** no post has been generated end to end under the final judge/writer split. Every Groq model pool was rate-limited before a cycle reached publication. The architecture is unit-tested and the judge stage is confirmed on live candidates, but the writing itself has not been observed under the final prompt.
+
+### 2.14 Outstanding work
+
+Tracked in [FIXES.md](FIXES.md) with a prioritised order. The two items that gate the submission are the `TO COMPLETE` sections of this document and deployment to an always-on host; everything else affects score rather than eligibility.
 
 ---
 
