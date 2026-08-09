@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ada Desk — Spiked</title>
+<script>
+  (function() {
+    var savedTheme = localStorage.getItem("ada-theme");
+    if (savedTheme === "light") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    }
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="assets/js/tailwind-config.js"></script>
+<link rel="stylesheet" href="assets/css/styles.css"/>
+</head>
+<body data-page="spiked" class="font-body-md text-body-md antialiased overflow-hidden flex h-screen w-screen">
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+<div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-primary/5 blur-[150px] rounded-full"></div>
+</div>
+
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden"></div>
+
+<aside id="sidebar" class="flex flex-col fixed left-0 top-0 h-full w-64 z-40 bg-surface-container-lowest border-r border-glass-stroke pt-20 pb-8 transition-all">
+<div class="px-6 mb-10">
+<h2 class="font-headline-lg text-primary text-2xl font-bold tracking-tight mb-1">Ada Engine</h2>
+<div class="flex items-center gap-2">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">v4.2.0-Active</span>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-3">
+<a data-page-link="home" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="index.html">
+<span class="material-symbols-outlined">home</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Home</span>
+</a>
+<a data-page-link="published" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="published.html">
+<span class="material-symbols-outlined">article</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Published</span>
+</a>
+<a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 relative overflow-hidden transition-all duration-300 rounded-lg mx-3" href="spiked.html">
+<div class="nav-glow absolute inset-0 bg-primary/10 blur-[40px] pointer-events-none"></div>
+<span class="material-symbols-outlined">delete_forever</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+</a>
+<a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Cycle Log</span>
+</a>
+<a data-page-link="api" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="api.html">
+<span class="material-symbols-outlined">api</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">API</span>
+</a>
+</nav>
+<div class="px-6 mb-6">
+<button data-initiate-cycle class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 px-4 rounded hover:bg-primary-fixed transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+Initiate Cycle
+</button>
+</div>
+<div class="mt-auto flex flex-col gap-1 px-3 border-t border-glass-stroke pt-4 mx-3">
+<button data-theme-toggle class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg w-full text-left" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-lg" data-theme-icon>light_mode</span>
+<span class="font-label-caps text-label-caps" data-theme-label>Light Theme</span>
+</button>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-2 px-6 hover:bg-surface-container-high transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined text-lg">help</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-3xl border-b border-glass-stroke shadow-sm shadow-primary/5 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 transition-all duration-300">
+<div class="flex items-center gap-4">
+<button id="menu-toggle" class="md:hidden text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-bold text-primary tracking-tight">
+Ada Desk
+</div>
+</div>
+<div class="hidden md:flex flex-1 max-w-md mx-8 relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input id="global-search" class="w-full bg-surface-container-lowest border border-glass-stroke rounded text-code-sm font-code-sm text-on-surface pl-9 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Query intelligence databank..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-2 border-r border-glass-stroke pr-4 mr-2">
+<button data-theme-toggle class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high" title="Toggle Light / Dark Theme">
+<span class="material-symbols-outlined text-xl" data-theme-icon>light_mode</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">memory</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high relative">
+<span class="material-symbols-outlined text-xl">sensors</span>
+<span class="absolute top-2 right-2 w-1.5 h-1.5 bg-error rounded-full animate-pulse"></span>
+</button>
+<a href="cycle-log.html" class="text-on-surface-variant hover:text-primary transition-colors duration-200 active:scale-95 p-2 rounded hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</a>
+</div>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+<div class="w-8 h-8 rounded border border-primary/30 overflow-hidden relative bg-surface-container-lowest">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent"></div>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary text-sm">robot_2</span>
+</div>
+</button>
+</div>
+</header>
+
+<main class="flex-1 w-full pt-16 md:pl-64 h-full flex flex-col z-10 relative overflow-hidden">
+<div class="flex-1 overflow-y-auto px-margin-mobile md:px-margin-desktop py-8">
+<div class="max-w-max-width mx-auto flex flex-col gap-8">
+
+<!-- Header Section -->
+<header class="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-glass-stroke pb-8">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<span class="material-symbols-outlined text-error text-3xl">delete_forever</span>
+<h2 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">Spiked Topics</h2>
+</div>
+<p class="font-code-sm text-code-sm text-on-surface-variant max-w-2xl">
+Log of analysis cycles rejected by the Ada Engine heuristics. Items below failed to meet threshold confidence or relevance scores during recent synthesis passes.
+</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative w-full md:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input id="spike-filter" class="w-full bg-surface border border-glass-stroke rounded-lg py-2 pl-10 pr-4 font-code-sm text-code-sm text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Filter spikes..." type="text"/>
+</div>
+<button class="glass-panel text-on-surface hover:text-primary p-2 rounded-lg transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+</header>
+
+<!-- Stats Overview -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-gutter">
+<div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-error/5 rounded-full blur-xl group-hover:bg-error/10 transition-colors"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Total Spiked (24h)</span>
+<span class="font-headline-lg text-headline-lg text-on-surface">142</span>
+</div>
+<div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Avg. Confidence</span>
+<span class="font-headline-lg text-headline-lg text-on-surface">34.2%</span>
+</div>
+<div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group col-span-2 md:col-span-2 flex-row items-center justify-between">
+<div>
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Primary Rejection Cause</span>
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Inconclusive Evidence</span>
+</div>
+<div class="h-12 w-32 flex items-end gap-1 opacity-70">
+<div class="w-full bg-surface-container rounded-t-sm h-[20%]"></div>
+<div class="w-full bg-surface-container rounded-t-sm h-[40%]"></div>
+<div class="w-full bg-surface-container rounded-t-sm h-[30%]"></div>
+<div class="w-full bg-surface-container rounded-t-sm h-[70%]"></div>
+<div class="w-full bg-surface-container rounded-t-sm h-[50%]"></div>
+<div class="w-full bg-error/40 rounded-t-sm h-[90%]"></div>
+</div>
+</div>
+</section>
+
+<!-- Spiked List -->
+<section class="flex flex-col gap-4" id="spike-list">
+<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-error/50"></div>
+<div class="flex-1 flex flex-col gap-3">
+<div class="flex items-start justify-between md:justify-start gap-4">
+<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Quantum Annealing in Commercial Logistics</h3>
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-error/10 text-error border border-error/20 whitespace-nowrap">Low Relevance</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+Analysis of D-Wave systems implementation for routing optimization. Data suggests marginal improvements over classical heuristics for typical mid-sized fleet operations, lacking significant disruption potential to warrant publication.
+</p>
+<div class="flex flex-wrap items-center gap-4 mt-2">
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span class="font-code-sm text-code-sm">10:42 AM - Today</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">memory</span>
+<span class="font-code-sm text-code-sm">Node-Alpha-4</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">percent</span>
+<span class="font-code-sm text-code-sm">Confidence: 42%</span>
+</div>
+</div>
+</div>
+<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
+<div class="mb-4">
+<span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Heuristic Output</span>
+<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-error/80 leading-tight">
+&gt; WARN: Topic density low.<br>
+&gt; ERR: Commercial application unverified.<br>
+&gt; ACTION: SPIKE (Threshold &lt; 60)
+</div>
+</div>
+<button data-reevaluate class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">refresh</span>
+Re-Evaluate
+</button>
+</div>
+</article>
+
+<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary/50"></div>
+<div class="flex-1 flex flex-col gap-3">
+<div class="flex items-start justify-between md:justify-start gap-4">
+<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface">CRISPR Off-Target Effects in Agriculture</h3>
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20 whitespace-nowrap">Redundant Data</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+Comprehensive review of unintended genetic modifications in modified crop strains. Findings duplicate insights already published in Cycle 4.1.8 regarding soy and maize variants.
+</p>
+<div class="flex flex-wrap items-center gap-4 mt-2">
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span class="font-code-sm text-code-sm">08:15 AM - Today</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">memory</span>
+<span class="font-code-sm text-code-sm">Node-Beta-1</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/70">
+<span class="material-symbols-outlined text-[16px]">percent</span>
+<span class="font-code-sm text-code-sm">Confidence: 88%</span>
+</div>
+</div>
+</div>
+<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
+<div class="mb-4">
+<span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Heuristic Output</span>
+<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-secondary/80 leading-tight">
+&gt; MATCH: Similar record found (ID: C4.1.8-92).<br>
+&gt; INFO: Novelty score 0.12.<br>
+&gt; ACTION: SPIKE (Redundant)
+</div>
+</div>
+<button data-merge class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">merge</span>
+Merge Data
+</button>
+</div>
+</article>
+
+<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group opacity-80 hover:opacity-100 transition-opacity">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-variant"></div>
+<div class="flex-1 flex flex-col gap-3">
+<div class="flex items-start justify-between md:justify-start gap-4">
+<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface-variant">Deep-Sea Mining Ecological Impact Model</h3>
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-surface-variant/30 text-on-surface-variant border border-glass-stroke whitespace-nowrap">Inconclusive Evidence</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant/60 line-clamp-2">
+Simulation of sediment plume dispersion in the Clarion-Clipperton Zone. Sensor data streams incomplete; stochastic model variance exceeds acceptable limits for publication formulation.
+</p>
+<div class="flex flex-wrap items-center gap-4 mt-2">
+<div class="flex items-center gap-1.5 text-on-surface-variant/50">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span class="font-code-sm text-code-sm">Yesterday - 23:59</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/50">
+<span class="material-symbols-outlined text-[16px]">memory</span>
+<span class="font-code-sm text-code-sm">Node-Gamma-7</span>
+</div>
+<div class="flex items-center gap-1.5 text-on-surface-variant/50">
+<span class="material-symbols-outlined text-[16px]">percent</span>
+<span class="font-code-sm text-code-sm">Confidence: 12%</span>
+</div>
+</div>
+</div>
+<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
+<div class="mb-4">
+<span class="font-label-caps text-[10px] uppercase text-on-surface-variant/50 block mb-1">Heuristic Output</span>
+<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-on-surface-variant/60 leading-tight">
+&gt; ERR: Insufficient data vectors.<br>
+&gt; WARN: Model variance &gt; 80%.<br>
+&gt; ACTION: SPIKE (Inconclusive)
+</div>
+</div>
+<button disabled class="w-full py-2 bg-transparent border border-glass-stroke/50 rounded text-on-surface-variant/50 font-label-caps text-label-caps uppercase cursor-not-allowed flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">block</span>
+Purged
+</button>
+</div>
+</article>
+</section>
+
+<div class="flex justify-center pb-8">
+<button id="load-previous" class="px-6 py-2 border border-glass-stroke rounded-full font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:border-primary/50 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined">expand_more</span>
+Load Previous Cycles
+</button>
+</div>
+
+</div>
+</div>
+</main>
+
+<script src="assets/js/agent-engine.js"></script>
+<script src="assets/js/agent-api.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

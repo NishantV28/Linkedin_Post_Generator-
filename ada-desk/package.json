@@ -1,0 +1,20 @@
+{
+  "name": "ada-desk",
+  "version": "4.2.0",
+  "description": "Ada Desk — Autonomous Intelligence Agent Control Panel & Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "serve": "node server.js"
+  },
+  "keywords": [
+    "ada-desk",
+    "ai-agent",
+    "dashboard",
+    "intelligence",
+    "vector-database"
+  ],
+  "author": "Ada Engine Team",
+  "license": "MIT"
+}
