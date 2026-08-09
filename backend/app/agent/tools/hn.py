@@ -27,6 +27,8 @@ MAX_COMMENT_CHARS = 220
 
 HN_ITEM_URL = "https://hn.algolia.com/api/v1/items/{object_id}"
 
+HN_TIMEOUT_SECONDS = 20.0
+
 
 def _fetch_top_comments(client: httpx.Client, object_id) -> str:
     """
@@ -39,7 +41,7 @@ def _fetch_top_comments(client: httpx.Client, object_id) -> str:
     if not object_id:
         return ""
     try:
-        res = client.get(HN_ITEM_URL.format(object_id=object_id), timeout=8.0)
+        res = client.get(HN_ITEM_URL.format(object_id=object_id), timeout=HN_TIMEOUT_SECONDS)
         if res.status_code != 200:
             return ""
         children = res.json().get("children") or []
@@ -72,7 +74,7 @@ def fetch_hn_candidates(persona: PersonaConfig, limit_per_keyword: int = 3) -> L
 
     keywords = persona.stable_interests if persona.stable_interests else [persona.domain]
 
-    with httpx.Client(timeout=10.0, headers=headers) as client:
+    with httpx.Client(timeout=HN_TIMEOUT_SECONDS, headers=headers) as client:
         for keyword in keywords[:5]:  # Query top 5 keywords to prevent rate limiting
             try:
                 # Algolia's /search ranks by relevance with no date bound, which

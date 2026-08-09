@@ -76,7 +76,9 @@ def publish_node(state: AgentState) -> AgentState:
                 sources.append(url)
         topic_title = "Reflection: recent coverage"
     else:
-        sources = [cand.url] if cand.url else []
+        # Sources are whatever the judge verified for THIS candidate, carried through
+        # the draft - never the candidate's URL guessed at publish time.
+        sources = list(draft.sources) if draft.sources else ([cand.url] if cand.url else [])
         topic_title = cand.title
 
     db = SessionLocal()

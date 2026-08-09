@@ -50,6 +50,8 @@ Start at [Suggested order](#suggested-order) for the working sequence.
 | — | Worked example copied verbatim into posts | **Done** | `persona/voice.py`, `nodes/qa_judge.py`, `prompts/writer.py` |
 | A-4 | **Candidate pre-filter — 63% fewer LLM calls** | **Done** | `tools/prefilter.py`, `tools/hn.py`, `tools/arxiv.py`, `core/scheduler.py` |
 | A-6 | Startup LLM self-check | **Done** | `agent/llm.py`, `main.py` |
+| SPEC | **Judge/writer split per `distill_persona_prompt_spec.md`** | **Done** | `persona/schema.py`, `persona/presets.py`, `persona/voice.py`, `agent/state.py`, `prompts/*.py`, `nodes/*.py`, `tests/test_phase3.py` |
+| — | LLM fallback chain, timeout, call delay | **Done** | `core/config.py`, `agent/llm.py`, `tools/*.py` |
 | A-2 | Memory that changes decisions | **Done** | `memory/repository.py`, `memory/hybrid_retriever.py`, `memory/reflection.py`, `nodes/reflection_writer.py`, `prompts/reflection.py`, `agent/graph.py`, `core/scheduler.py` |
 
 All **22** tests pass after these changes (4 added during this work).

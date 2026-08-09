@@ -2,7 +2,6 @@ import logging
 
 from backend.app.agent.state import AgentState, DraftPost
 from backend.app.agent.llm import get_structured_llm
-from backend.app.agent.persona.voice import ensure_closing_line_separation
 from backend.app.agent.prompts.reflection import (
     REFLECTION_SYSTEM_PROMPT,
     REFLECTION_USER_PROMPT
@@ -46,7 +45,6 @@ def reflection_writer_node(state: AgentState) -> AgentState:
             trend_titles=trend_titles,
             tone=voice.tone,
             sentence_rhythm=voice.sentence_rhythm,
-            signature_tell=voice.signature_tell or "None",
             forbidden_phrases=", ".join(voice.forbidden_phrases) or "None",
         )
 
@@ -64,9 +62,6 @@ def reflection_writer_node(state: AgentState) -> AgentState:
             ("system", system_msg),
             ("user", user_msg)
         ])
-
-        if voice.requires_standalone_closing_line:
-            draft.text = ensure_closing_line_separation(draft.text)
 
         logger.info(f"Reflection draft generated across {len(titles)} related posts.")
         state["draft"] = draft

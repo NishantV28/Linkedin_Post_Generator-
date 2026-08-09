@@ -36,21 +36,23 @@ MAX_SHARE_PER_SOURCE = 0.7
 # is where hallucinated detail comes from.
 MIN_SUMMARY_CHARS = 60
 
-# Best credibility a source can realistically be scored at. Derived from observed
-# editorial scoring, not invented: arXiv preprints scored 9, GitHub repos 6-7,
-# Ask HN threads 4-6, general web results 5-6.
-SOURCE_CREDIBILITY_CEILING = {
-    "arxiv": 9.0,
-    "github": 7.0,
-    "hn": 7.0,
-    "web": 6.0,
+# Best evidence_strength a source can realistically be scored at, on the judge's 0-5
+# scale. Derived from observed scoring rather than invented. The pre-filter only drops
+# what could never clear the bar; everything plausible still goes to the judge, which
+# now has specific disqualifiers (pure_announcement, insufficient_detail, and so on)
+# for the weak cases.
+SOURCE_EVIDENCE_CEILING = {
+    "arxiv": 4.5,
+    "github": 3.5,
+    "hn": 3.5,
+    "web": 3.0,
 }
 
 # Discussion volume at which a submission counts as community-vetted, and the ceiling
 # it then earns. Chosen so a genuinely debated story can clear a research persona's
 # credibility bar while an ordinary link cannot.
 HIGH_ENGAGEMENT_POINTS = 100
-HIGH_ENGAGEMENT_CEILING = 8.0
+HIGH_ENGAGEMENT_CEILING = 4.0
 
 # Self-posts asking the community a question are discussion, not a contribution.
 LOW_VALUE_TITLE_PATTERNS = (
@@ -72,12 +74,12 @@ def _parse_published(value: Optional[str]) -> Optional[datetime]:
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
 
-def _credibility_ceiling(candidate: TopicCandidate) -> float:
-    ceiling = SOURCE_CREDIBILITY_CEILING.get(candidate.source, 6.0)
+def _evidence_ceiling(candidate: TopicCandidate) -> float:
+    ceiling = SOURCE_EVIDENCE_CEILING.get(candidate.source, 3.0)
 
     # An arXiv link posted to HN is still an arXiv paper.
     if candidate.source == "hn" and "arxiv.org" in (candidate.url or ""):
-        ceiling = max(ceiling, SOURCE_CREDIBILITY_CEILING["arxiv"])
+        ceiling = max(ceiling, SOURCE_EVIDENCE_CEILING["arxiv"])
 
     # Heavily discussed submissions have been scrutinised by a technical audience,
     # which is a real credibility signal - and it is what makes a source worth
@@ -90,7 +92,7 @@ def _credibility_ceiling(candidate: TopicCandidate) -> float:
     # A request for help or endorsement is discussion, not a contribution, however
     # popular it is - so this is applied last and wins.
     if any(p.search(candidate.title or "") for p in LOW_VALUE_TITLE_PATTERNS):
-        ceiling = min(ceiling, 5.0)
+        ceiling = min(ceiling, 2.5)
 
     return ceiling
 
@@ -103,7 +105,7 @@ def _rank_score(candidate: TopicCandidate, now: datetime) -> float:
     else:
         age_days = max(0.0, (now - published).total_seconds() / 86400.0)
         recency = max(0.0, 1.0 - age_days / MAX_CANDIDATE_AGE_DAYS)
-    return _credibility_ceiling(candidate) + 2.0 * recency
+    return _evidence_ceiling(candidate) + 2.0 * recency
 
 
 def prefilter_candidates(
@@ -116,7 +118,7 @@ def prefilter_candidates(
     promising `limit` survivors.
     """
     now = datetime.now(timezone.utc)
-    min_credibility = persona.editorial_thresholds.min_credibility
+    min_evidence = persona.editorial_thresholds.min_evidence_strength
     survivors: List[TopicCandidate] = []
     dropped: dict = {"stale": 0, "thin": 0, "low_credibility": 0}
 
@@ -130,7 +132,7 @@ def prefilter_candidates(
             dropped["thin"] += 1
             continue
 
-        if _credibility_ceiling(cand) < min_credibility:
+        if _evidence_ceiling(cand) < min_evidence:
             dropped["low_credibility"] += 1
             continue
 
@@ -158,8 +160,8 @@ def prefilter_candidates(
 
     logger.info(
         "Pre-filter: %d candidates -> %d evaluated "
-        "(dropped %d stale, %d thin, %d below credibility %.1f; %d over the per-cycle cap)",
+        "(dropped %d stale, %d thin, %d below evidence bar %.1f; %d over the per-cycle cap)",
         len(candidates), len(selected), dropped["stale"], dropped["thin"],
-        dropped["low_credibility"], min_credibility, max(0, len(survivors) - len(selected)),
+        dropped["low_credibility"], min_evidence, max(0, len(survivors) - len(selected)),
     )
     return selected

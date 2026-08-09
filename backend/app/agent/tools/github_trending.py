@@ -35,7 +35,7 @@ def fetch_github_candidates(persona: PersonaConfig, limit: int = 4) -> List[Topi
             "per_page": limit
         }
 
-        with httpx.Client(timeout=10.0, headers=headers) as client:
+        with httpx.Client(timeout=20.0, headers=headers) as client:
             res = client.get(GITHUB_SEARCH_URL, params=params)
             if res.status_code != 200:
                 logger.warning(f"GitHub API returned status code {res.status_code}")

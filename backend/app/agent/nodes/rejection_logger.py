@@ -22,10 +22,14 @@ def _describe_rejection(state: AgentState) -> Tuple[str, str, Dict[str, Any]]:
     editorial_scores: Dict[str, Any] = {}
     if judge_verdict:
         editorial_scores = {
-            "relevance": judge_verdict.relevance,
-            "novelty": judge_verdict.novelty,
+            "evidence_strength": judge_verdict.scores.evidence_strength,
+            "editorial_value_score": judge_verdict.scores.editorial_value,
+            "persona_fit": judge_verdict.scores.persona_fit,
+            "timeliness": judge_verdict.scores.timeliness,
+            "explainability": judge_verdict.scores.explainability,
             "credibility": judge_verdict.credibility,
-            "timeliness": judge_verdict.timeliness,
+            "editorial_value": judge_verdict.editorial_value,
+            "disqualifier": judge_verdict.disqualifier,
             "decision": judge_verdict.decision,
         }
 

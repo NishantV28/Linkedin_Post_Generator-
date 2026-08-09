@@ -15,13 +15,11 @@ STRUCTURE
 2. Say why - what is happening in the field that pulled you there. Be specific about
    the technical thread connecting them, not vague about "momentum" or "excitement".
 3. Say what you think it means, or what you are watching for next.
-4. Stop.
+4. Stop when the point is made. Do not append a separate takeaway line.
 
 VOICE
 - Tone: {tone}
 - Rhythm: {sentence_rhythm}
-- Your signature habit: {signature_tell}
-  Separate that final line from the body with a BLANK LINE (two newlines).
 
 HARD RULES
 1. Never use these words or phrases: {forbidden_phrases}

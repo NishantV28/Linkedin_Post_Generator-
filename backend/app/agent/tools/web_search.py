@@ -32,7 +32,7 @@ def fetch_web_candidates(persona: PersonaConfig, limit: int = 3) -> List[TopicCa
                 "search_depth": "basic",
                 "max_results": limit
             }
-            with httpx.Client(timeout=10.0, headers=headers) as client:
+            with httpx.Client(timeout=20.0, headers=headers) as client:
                 res = client.post(TAVILY_SEARCH_URL, json=payload)
                 if res.status_code == 200:
                     results = res.json().get("results", [])
@@ -62,7 +62,7 @@ def fetch_web_candidates(persona: PersonaConfig, limit: int = 3) -> List[TopicCa
         data = {"q": query}
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-        with httpx.Client(timeout=10.0, headers=headers) as client:
+        with httpx.Client(timeout=20.0, headers=headers) as client:
             res = client.post(ddg_url, data=data)
             if res.status_code == 200:
                 # Basic parsing of search result links

@@ -24,25 +24,51 @@ const AdaAgentAPI = {
     return response.json();
   },
 
-  async initiateCycle(persona = DEFAULT_PERSONA) {
-    const agent = { ...DEFAULT_PERSONA, ...(persona.persona || persona) };
+  async initiateCycle(persona) {
+    // Default to the persona chosen at the gate rather than a hardcoded one, so the
+    // "run cycle" control cannot silently create a second agent in another domain.
+    const chosen = window.AdaPersona?.getPersona();
+    const agent = { ...DEFAULT_PERSONA, ...(chosen || {}), ...((persona || {}).persona || persona || {}) };
     const result = await this._request("/agent/init", {
-      method: "POST", body: JSON.stringify({ persona: agent })
+      method: "POST", body: JSON.stringify({ persona: { name: agent.name, domain: agent.domain } })
     });
+    window.AdaPersona?.save(result.agentId, { name: agent.name, domain: agent.domain });
     localStorage.setItem(BACKEND_AGENT_KEY, result.agentId);
     await this.sync(result.agentId);
     return { id: result.agentId, agentId: result.agentId };
   },
 
   async sync(agentId = localStorage.getItem(BACKEND_AGENT_KEY)) {
-    const status = await this._request("/agent/status");
-    const agent = status.agents.find(item => item.agentId === agentId) || status.agents[0];
-    if (!agent) return { status, posts: [], rejectedTopics: [] };
-    localStorage.setItem(BACKEND_AGENT_KEY, agent.agentId);
+    // The dashboard is bound to one agent. Falling back to whichever agent the backend
+    // happened to list first meant the page could show a different persona's feed,
+    // published under a domain the user never selected.
+    if (!agentId) {
+      window.AdaPersona?.forget("Select a persona to begin.");
+      return { status: { agents: [] }, posts: [], rejectedTopics: [] };
+    }
+
+    const status = await this._request(`/agent/status?agentId=${encodeURIComponent(agentId)}`);
+    const agent = (status.agents || []).find(item => item.agentId === agentId);
+    if (!agent) {
+      // The stored id no longer exists, typically because the database was reset.
+      window.AdaPersona?.forget("That agent no longer exists on the backend.");
+      return { status, posts: [], rejectedTopics: [] };
+    }
+    // Activity is live progress for the current cycle. It is a nice-to-have, so a
+    // backend that predates the endpoint should still render a working dashboard
+    // rather than failing the whole sync.
     const [feed, rejected, activity] = await Promise.all([
       this._request(`/agent/feed?agentId=${encodeURIComponent(agent.agentId)}`),
       this._request(`/agent/rejected?agentId=${encodeURIComponent(agent.agentId)}`),
       this._request(`/agent/activity?agentId=${encodeURIComponent(agent.agentId)}`)
+        .catch(() => ({
+          state: agent.active ? "scheduled" : "stopped",
+          detail: agent.nextRunAt
+            ? `Next cycle at ${new Date(agent.nextRunAt).toLocaleTimeString()}.`
+            : "Waiting for the next scheduled cycle.",
+          articleTitle: null,
+          updatedAt: null
+        }))
     ]);
     const published = (feed.posts || []).map(post => ({
       id: post.id, title: post.text.split(/\n|\. /)[0].slice(0, 100) || "Published post",

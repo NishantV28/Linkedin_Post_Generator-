@@ -33,3 +33,5 @@ frontend/.env.local
 htmlcov/
 WHAT_CHANGED.md
 
+
+frontend/.vite/

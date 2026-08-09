@@ -1,119 +1,127 @@
 import logging
+
 from backend.app.agent.state import AgentState, DraftPost
 from backend.app.agent.llm import get_structured_llm
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.hybrid_retriever import HybridRetriever
-from backend.app.agent.persona.voice import ensure_closing_line_separation
 from backend.app.agent.prompts.writer import (
     WRITER_SYSTEM_PROMPT,
-    WRITER_USER_PROMPT
+    WRITER_USER_PROMPT,
 )
 
 logger = logging.getLogger("autonomous_agent.agent.nodes.writer")
 
+FEW_SHOT_POSTS = 2
+
+
+def _few_shot_context(agent_id: str, query_text: str) -> str:
+    """Past posts most related to this topic, used as a voice anchor."""
+    if not agent_id:
+        return "No posts published yet. Match the tone of the example above."
+    db = SessionLocal()
+    try:
+        posts = HybridRetriever.get_relevant_context(
+            agent_id=agent_id, query_text=query_text, db=db, top_k=FEW_SHOT_POSTS
+        )
+        if not posts:
+            return "No posts published yet. Match the tone of the example above."
+        return "\n\n".join(f"- {p['text']}" for p in posts)
+    except Exception as err:
+        logger.debug(f"Could not retrieve few-shot context: {err}")
+        return "No posts published yet. Match the tone of the example above."
+    finally:
+        db.close()
+
+
 def writer_node(state: AgentState) -> AgentState:
     """
-    Generates or revises a persona-voiced LinkedIn post draft using ChatOpenAI with structured output.
-    Uses hybrid-retrieved past posts for few-shot style anchoring.
+    Render the judge's editorial decision as a post.
+
+    The writer does not choose the topic or the angle. It receives a settled
+    writer_context and turns it into prose, which is what keeps a post tied to the
+    source the judge actually approved.
     """
-    cand = state["current_candidate"]
     persona = state["persona"]
-    judge_verdict = state.get("judge_verdict")
+    verdict = state.get("judge_verdict")
     qa_verdict = state.get("qa_verdict")
     retry_count = state.get("retry_count", 0)
 
-    if not cand:
-        logger.warning("No candidate provided to writer_node.")
+    if not verdict or not verdict.writer_context:
+        logger.warning("writer_node called without an editorial handoff.")
+        state["draft"] = None
+        state["node_error"] = "writer: no writer_context from the editorial judge"
         return state
 
-    # Count the revision here rather than in the router: LangGraph rebuilds state
-    # for conditional-edge functions, so mutations made there are never persisted.
-    if qa_verdict and qa_verdict.verdict.lower() == "revise":
+    ctx = verdict.writer_context
+
+    # Count the revision here rather than in the router: LangGraph rebuilds state for
+    # conditional-edge functions, so mutations made there are never persisted.
+    if qa_verdict and qa_verdict.verdict == "revise":
         retry_count += 1
         state["retry_count"] = retry_count
 
     try:
-        # Retrieve topically relevant past posts for few-shot style anchoring
-        few_shot_context = "No previous posts in memory (first post for persona)."
-        try:
-            db = SessionLocal()
-            relevant_posts = HybridRetriever.get_relevant_context(
-                agent_id=state.get("agent_id", "default"),
-                query_text=f"{cand.title} {cand.summary}",
-                db=db,
-                top_k=2
-            )
-            db.close()
-
-            if relevant_posts:
-                anchor_snippets = []
-                for idx, p in enumerate(relevant_posts, 1):
-                    anchor_snippets.append(f"Anchor #{idx}:\nText: {p['text']}\nRationale: {p.get('rationale', 'N/A')}")
-                few_shot_context = "\n\n".join(anchor_snippets)
-        except Exception as err:
-            logger.debug(f"Could not retrieve few-shot context from memory: {err}")
-
-        # Build prompt inputs
         voice = persona.voice_guidelines
-        forbidden_str = ", ".join(voice.forbidden_phrases) if voice.forbidden_phrases else "None"
-        judge_reasoning = judge_verdict.reasoning if judge_verdict else "Approved candidate."
-
-        structure_str = "\n".join(
-            f"{i}. {beat}" for i, beat in enumerate(voice.post_structure, 1)
-        ) or "1. Lead with the substance.\n2. Explain the one thing that matters.\n3. Stop."
-
-        # Before any real posts exist the worked example is the only voice anchor there is.
-        if few_shot_context.startswith("No previous posts") and voice.worked_example:
-            few_shot_context = f"No posts published yet. Match the tone of the example above."
-
-        revision_section = ""
-        if qa_verdict and qa_verdict.verdict.lower() == "revise":
-            revision_section = f"REVISION REQUEST (Attempt #{retry_count}):\nPrevious QA Feedback: {qa_verdict.feedback}\nPlease fix the issues above in this new draft."
 
         system_msg = WRITER_SYSTEM_PROMPT.format(
             persona_name=persona.name,
             persona_domain=persona.domain,
             persona_bio=persona.bio,
             core_question=voice.core_question or "What does this actually change?",
-            post_structure=structure_str,
-            worked_example=voice.worked_example or "(no example available)",
             tone=voice.tone,
             sentence_rhythm=voice.sentence_rhythm,
-            signature_tell=voice.signature_tell or "None",
             stable_interests=", ".join(persona.stable_interests) or "None",
-            forbidden_phrases=forbidden_str,
-            min_words=voice.min_post_words or 50,
-            max_words=voice.max_post_words or 120,
-            few_shot_context=few_shot_context
+            forbidden_phrases=", ".join(voice.forbidden_phrases) or "None",
+            worked_example=voice.worked_example or "(no example available)",
+            few_shot_context=_few_shot_context(
+                state.get("agent_id", ""), f"{ctx.core_claim} {ctx.mechanism}"
+            ),
+            min_words=voice.min_post_words,
+            max_words=voice.max_post_words,
+            max_sentence_words=voice.max_sentence_words,
         )
+
+        revision_section = ""
+        if qa_verdict and qa_verdict.verdict == "revise":
+            revision_section = (
+                f"REVISION REQUEST (attempt {retry_count}):\n{qa_verdict.feedback}\n"
+                "Fix all of these in this rewrite."
+            )
 
         user_msg = WRITER_USER_PROMPT.format(
-            title=cand.title,
-            summary=cand.summary,
-            source=cand.source,
-            url=cand.url,
-            published_at=cand.published_at,
-            judge_reasoning=judge_reasoning,
-            revision_feedback_section=revision_section
+            editorial_angle=verdict.editorial_angle,
+            obvious_assumption=ctx.obvious_assumption,
+            interesting_turn=ctx.interesting_turn,
+            core_claim=ctx.core_claim,
+            mechanism=ctx.mechanism,
+            evidence="\n".join(f"- {e}" for e in ctx.evidence) or "None supplied.",
+            limitations="\n".join(f"- {l}" for l in ctx.limitations) or "None supplied.",
+            persona_relevance=ctx.persona_relevance,
+            why_now=ctx.why_now or "No specific timeliness evidence. Do not invent any.",
+            sources="\n".join(ctx.sources) or "None",
+            revision_feedback_section=revision_section,
         )
 
-        structured_llm = get_structured_llm(DraftPost, temperature=0.7)
-
+        structured_llm = get_structured_llm(DraftPost, temperature=0.6)
         draft: DraftPost = structured_llm.invoke([
             ("system", system_msg),
-            ("user", user_msg)
+            ("user", user_msg),
         ])
 
-        if persona.voice_guidelines.requires_standalone_closing_line:
-            draft.text = ensure_closing_line_separation(draft.text)
+        # Sources are the judge's, not the model's. Letting the writer supply them
+        # risks a post citing material it was never given.
+        draft.sources = list(ctx.sources)
 
-        logger.info(f"Writer node generated draft for '{cand.title[:45]}...' ({len(draft.text)} chars)")
+        logger.info(
+            f"Writer drafted '{verdict.editorial_angle[:50]}...' "
+            f"({len(draft.text.split())} words)"
+        )
         state["draft"] = draft
 
     except Exception as e:
-        # No fallback draft. The previous template output ignored the persona's voice
-        # entirely, so an API blip would publish off-voice filler into the graded feed.
-        logger.error(f"Writer could not draft '{cand.title[:45]}...': {e}", exc_info=True)
+        # No fallback draft: a template that ignores the persona's voice would put
+        # off-voice filler into the graded feed on any API blip.
+        logger.error(f"Writer could not draft: {e}", exc_info=True)
         state["draft"] = None
         state["node_error"] = f"writer: {e}"
 

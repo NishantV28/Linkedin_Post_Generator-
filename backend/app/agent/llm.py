@@ -1,6 +1,10 @@
 import os
 import logging
+import time
 from typing import Any, Optional, Tuple, Type
+
+import openai
+from langchain_core.runnables import RunnableLambda
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from backend.app.core.config import settings
@@ -19,6 +23,15 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 # Attempts per structured-output call, covering transient malformed tool calls.
 STRUCTURED_OUTPUT_ATTEMPTS = 3
+
+# Failures worth retrying on the same model. Rate limits are deliberately excluded:
+# they do not clear in seconds, so the fallback model should be reached immediately.
+RETRYABLE_ERRORS = (
+    openai.BadRequestError,       # malformed tool call - llama does this ~1 in 3
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+    openai.InternalServerError,
+)
 
 
 def structured_output_method(model_name: str) -> Optional[str]:
@@ -69,24 +82,69 @@ def validate_llm_configuration() -> Tuple[bool, str]:
     return True, f"Structured output confirmed for model '{settings.LLM_MODEL or '(provider default)'}'."
 
 
-def get_structured_llm(schema: Type[Any], temperature: float = 0.2, model_name: Optional[str] = None):
+def _throttle(value: Any) -> Any:
     """
-    Build a chat model bound to a structured output schema, choosing the method the
-    configured model actually supports. Use this rather than calling
-    `with_structured_output` directly, so a model swap stays a config change.
+    Pause before a model call.
 
-    Retries because structured output is unreliable on some models: llama-3.3-70b
-    returns a malformed tool call ("tool_use_failed") roughly one time in three for
-    the post-drafting schema. That is transient and succeeds on a retry, unlike a
-    rate limit, which exhausts the attempts and correctly surfaces as an error.
+    Placed inside the retry and fallback wrappers so every attempt is spaced, not just
+    the first. A cycle fires a dozen calls back to back, which is what trips per-minute
+    limits even when the daily budget is fine.
     """
+    delay = settings.LLM_CALL_DELAY_SECONDS
+    if delay and delay > 0:
+        time.sleep(delay)
+    return value
+
+
+def _build_structured(schema: Type[Any], model_name: Optional[str], temperature: float):
+    """One model, bound to the schema, throttled and retried."""
     llm = get_llm(model_name=model_name, temperature=temperature)
     method = structured_output_method(llm.model_name)
-    if method:
-        structured = llm.with_structured_output(schema, method=method)
-    else:
-        structured = llm.with_structured_output(schema)
-    return structured.with_retry(stop_after_attempt=STRUCTURED_OUTPUT_ATTEMPTS)
+    structured = (
+        llm.with_structured_output(schema, method=method) if method
+        else llm.with_structured_output(schema)
+    )
+
+    # Retry only what retrying can actually fix. A malformed tool call or a dropped
+    # connection succeeds on a second attempt; a rate limit will not, and retrying
+    # into it just delays the fallback that would have worked.
+    return (RunnableLambda(_throttle) | structured).with_retry(
+        retry_if_exception_type=RETRYABLE_ERRORS,
+        stop_after_attempt=STRUCTURED_OUTPUT_ATTEMPTS,
+    )
+
+
+def fallback_models() -> list:
+    """Configured fallback model names, minus the primary and any blanks."""
+    primary = (settings.LLM_MODEL or "").strip()
+    names = [n.strip() for n in (settings.LLM_FALLBACK_MODELS or "").split(",")]
+    return [n for n in names if n and n != primary]
+
+
+def get_structured_llm(schema: Type[Any], temperature: float = 0.2, model_name: Optional[str] = None):
+    """
+    Build a chat model bound to a structured output schema, with throttling, retries
+    and model fallbacks.
+
+    Use this rather than calling `with_structured_output` directly: it selects the
+    structured-output method the model supports, so swapping models stays a config
+    change rather than a code change.
+
+    Fallbacks matter because each Groq model has its own quota. Exhausting the primary
+    used to stall every cycle until the window refilled; now the run continues on the
+    next model, which is a smaller quality cost than publishing nothing.
+    """
+    primary = _build_structured(schema, model_name, temperature)
+
+    # An explicit model_name is a deliberate choice by the caller - do not silently
+    # substitute a different one.
+    if model_name is not None:
+        return primary
+
+    alternates = [_build_structured(schema, name, temperature) for name in fallback_models()]
+    if not alternates:
+        return primary
+    return primary.with_fallbacks(alternates)
 
 def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatOpenAI:
     """
@@ -100,21 +158,23 @@ def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatO
     if groq_api_key and groq_api_key != "your_groq_api_key_here":
         selected_model = model_name or settings.LLM_MODEL or DEFAULT_GROQ_MODEL
         base_url = settings.LLM_BASE_URL or "https://api.groq.com/openai/v1"
-        logger.info(f"Initializing Groq ChatOpenAI client (Model: {selected_model})")
+        logger.debug(f"Groq client ready (model: {selected_model})")
         return ChatOpenAI(
             api_key=groq_api_key,
             base_url=base_url,
             model=selected_model,
-            temperature=temperature
+            temperature=temperature,
+            timeout=settings.LLM_TIMEOUT_SECONDS
         )
 
     if openai_api_key and openai_api_key != "your_openai_api_key_here":
         selected_model = model_name or settings.LLM_MODEL or "gpt-4o-mini"
-        logger.info(f"Initializing OpenAI ChatOpenAI client (Model: {selected_model})")
+        logger.debug(f"OpenAI client ready (model: {selected_model})")
         return ChatOpenAI(
             api_key=openai_api_key,
             model=selected_model,
-            temperature=temperature
+            temperature=temperature,
+            timeout=settings.LLM_TIMEOUT_SECONDS
         )
 
     raise ValueError(

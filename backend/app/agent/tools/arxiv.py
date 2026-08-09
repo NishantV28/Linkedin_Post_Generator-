@@ -11,6 +11,11 @@ logger = logging.getLogger("autonomous_agent.tools.arxiv")
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
+# arXiv is frequently slow. A timeout here costs the whole source for that cycle -
+# and after pre-filtering it is the only source reliably clearing a research
+# persona's credibility bar, so a short timeout means an empty cycle.
+ARXIV_TIMEOUT_SECONDS = 45.0
+
 # Namespace mappings for arXiv Atom XML feed
 NAMESPACES = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -51,7 +56,7 @@ def fetch_arxiv_candidates(persona: PersonaConfig, max_results: int = 15) -> Lis
 
         # follow_redirects: arXiv answers http with a 301 to https. Without this the
         # request returns an empty 301 body and the source silently yields nothing.
-        with httpx.Client(timeout=15.0, headers=headers, follow_redirects=True) as client:
+        with httpx.Client(timeout=ARXIV_TIMEOUT_SECONDS, headers=headers, follow_redirects=True) as client:
             res = client.get(ARXIV_API_URL, params=params)
             if res.status_code != 200:
                 logger.warning(f"arXiv API returned status code {res.status_code}")

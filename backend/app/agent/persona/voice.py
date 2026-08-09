@@ -1,57 +1,100 @@
 """
-Deterministic checks and repairs for persona voice rules.
+Deterministic checks for persona voice rules.
 
-Anything that can be decided by inspecting the text belongs here rather than in a
-prompt: it is cheaper, it cannot drift between runs, and it does not consume a
-revision round-trip.
+Anything decidable by inspecting the text belongs here rather than in a prompt: it is
+cheaper, it cannot drift between runs, and it does not consume a revision round-trip.
+Every rule here exists because a live run violated it.
 """
 
 import re
 from typing import List
 
-# A closing line long enough to be a paragraph is a summary, not a takeaway.
-MAX_CLOSING_LINE_WORDS = 30
-
-# Shortest run of shared words treated as copying rather than coincidence. Five is
-# long enough that ordinary phrasing ("it is worth noting that") does not trip it.
+# Shortest run of shared words treated as copying rather than coincidence. Five is long
+# enough that ordinary phrasing ("it is worth noting that") does not trip it.
 MIN_BORROWED_RUN_WORDS = 5
+
+# Naming a structural beat, or addressing the writing instructions themselves, is
+# scaffolding. A model handed a numbered structure will otherwise emit the beat names
+# as headings, and one draft repeated the plain-language instruction back as prose.
+SCAFFOLDING_PATTERNS = [
+    re.compile(r"\bthe obvious (?:claim|assumption)\b", re.I),
+    re.compile(r"\bthe turn is\b", re.I),
+    re.compile(r"\bthe takeaway line\b", re.I),
+    re.compile(r"\ba smart (?:reader|adult|casual reader)\b", re.I),
+    re.compile(r"\bwith no background in this\b", re.I),
+    re.compile(r"\bin plain (?:language|english)\b", re.I),
+    re.compile(r"\bcasual reader would assume\b", re.I),
+]
+
+# Endings the persona does not use: the post stops when the mechanism is explained.
+CLOSING_TAKEAWAY_PATTERNS = [
+    re.compile(r"\b(?:the\s+)?(?:key\s+)?takeaway\b", re.I),
+    re.compile(r"^\s*in short[,:]", re.I | re.M),
+    re.compile(r"^\s*(?:the\s+)?bottom line[,:]", re.I | re.M),
+    re.compile(r"\bthis shows that\b", re.I),
+    re.compile(r"\bwhat this means (?:is|for)\b", re.I),
+    re.compile(r"\bthe future of ai\b", re.I),
+]
+
+# A definition in brackets is a gloss, not a translation. The term should be rewritten.
+PARENTHETICAL_DEFINITION = re.compile(r"\(([^)]{25,})\)")
+
+EM_DASH_CHARS = ("\u2014", "\u2013", "--")
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 
 def _words(text: str) -> List[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
-# Wording that shows the writer has narrated its own instructions instead of following
-# them - naming the structural beats, or repeating the plain-language test back as prose.
-# Naming a beat ("The obvious claim is...") or addressing the instructions themselves
-# ("a smart reader with no background...") is scaffolding. Ordinary connective prose
-# like "The mechanism:" or "The catch:" is NOT - the persona's own worked example uses
-# it, and flagging it made the writer unable to satisfy the example and the guard at
-# the same time, so every candidate burned its revisions and nothing published.
-SCAFFOLDING_PATTERNS = [
-    re.compile(r"\bthe obvious claim\b", re.I),
-    re.compile(r"\bthe turn is\b", re.I),
-    re.compile(r"\bthe takeaway line\b", re.I),
-    re.compile(r"\ba smart (?:reader|adult)\b", re.I),
-    re.compile(r"\bwith no background in this\b", re.I),
-    re.compile(r"\bstandalone takeaway\b", re.I),
-    re.compile(r"\bin plain (?:language|english)\b", re.I),
-    re.compile(r"\bcasual reader would assume\b", re.I),
-]
+def em_dashes(text: str) -> bool:
+    """True if the draft uses an em- or en-dash, which reads as machine-written here."""
+    return any(ch in (text or "") for ch in EM_DASH_CHARS)
 
 
-def scaffolding_leaks(draft: str) -> List[str]:
+def overlong_sentences(text: str, max_words: int) -> List[str]:
     """
-    Phrases where the draft describes its own structure rather than just having it.
+    Sentences past the persona's limit.
 
-    Models handed a numbered structure will sometimes emit the beat names as headings
-    ("The obvious claim is...", "The mechanism:"), and one draft repeated the
-    plain-language instruction itself back as a sentence. The reader should see the
-    shape, never the scaffolding.
+    A sentence doing two jobs should be split. One live draft ran to 55 words with two
+    parentheticals and read like a conference abstract.
     """
+    if not text or max_words <= 0:
+        return []
+    long_ones = []
+    for chunk in _SENTENCE_SPLIT.split(text.strip()):
+        sentence = " ".join(chunk.split())
+        if len(sentence.split()) > max_words:
+            long_ones.append(sentence)
+    return long_ones
+
+
+def parenthetical_definitions(text: str) -> List[str]:
+    """
+    Bracketed explanations of jargon.
+
+    Glossing a term keeps the jargon and adds a footnote. The persona rewrites the
+    idea in plain words instead.
+    """
+    return [m.group(0)[:80] for m in PARENTHETICAL_DEFINITION.finditer(text or "")]
+
+
+def closing_takeaway(text: str) -> List[str]:
+    """Appended conclusions after the mechanism has already been explained."""
+    found = []
+    for pattern in CLOSING_TAKEAWAY_PATTERNS:
+        match = pattern.search(text or "")
+        if match:
+            found.append(match.group(0).strip())
+    return found
+
+
+def scaffolding_leaks(text: str) -> List[str]:
+    """Phrases where the draft describes its own structure rather than just having it."""
     found = []
     for pattern in SCAFFOLDING_PATTERNS:
-        match = pattern.search(draft or "")
+        match = pattern.search(text or "")
         if match:
             found.append(match.group(0).strip())
     return found
@@ -61,10 +104,9 @@ def borrowed_phrases(draft: str, example: str, min_run: int = MIN_BORROWED_RUN_W
     """
     Word runs the draft has lifted verbatim from the persona's worked example.
 
-    The example exists to show the shape of a post. Models tend to treat it as a
-    template and reuse its sentences, which makes every post sound identical and can
-    state things that are simply untrue of the new topic - describing a forum thread
-    as "another paper", or referring to a "benchmark score" that does not exist.
+    The example exists to show shape. Models tend to treat it as a template and reuse
+    its sentences, which makes every post sound identical and can state things simply
+    untrue of the new topic.
     """
     if not draft or not example:
         return []
@@ -78,17 +120,16 @@ def borrowed_phrases(draft: str, example: str, min_run: int = MIN_BORROWED_RUN_W
         " ".join(draft_words[i:i + min_run])
         for i in range(len(draft_words) - min_run + 1)
     }
+    joined_draft = " ".join(draft_words)
 
     found: List[str] = []
     i = 0
     while i <= len(example_words) - min_run:
         run = " ".join(example_words[i:i + min_run])
         if run in draft_runs:
-            # Extend to report the longest matching run rather than a fragment.
             end = i + min_run
             while end < len(example_words):
-                longer = " ".join(example_words[i:end + 1])
-                if " ".join(_words(draft)).find(longer) == -1:
+                if joined_draft.find(" ".join(example_words[i:end + 1])) == -1:
                     break
                 end += 1
             found.append(" ".join(example_words[i:end]))
@@ -96,42 +137,3 @@ def borrowed_phrases(draft: str, example: str, min_run: int = MIN_BORROWED_RUN_W
         else:
             i += 1
     return found
-
-
-def has_standalone_closing_line(text: str) -> bool:
-    """
-    True when the draft ends with a short, self-contained line set off from the body
-    by a blank line - the persona's signature closing beat.
-    """
-    blocks = [b.strip() for b in text.strip().split("\n\n") if b.strip()]
-    if len(blocks) < 2:
-        return False
-    closing = blocks[-1]
-    if "\n" in closing:  # a multi-line block is a paragraph, not a standalone line
-        return False
-    return len(closing.split()) <= MAX_CLOSING_LINE_WORDS
-
-
-def ensure_closing_line_separation(text: str) -> str:
-    """
-    Promote a trailing takeaway line into its own block.
-
-    Models reliably produce the right closing *sentence* but often separate it with a
-    single newline instead of a blank line. That is a formatting slip, not a writing
-    failure, so it is repaired here instead of spending a revision round-trip on it.
-
-    Only applied when the final line is already short enough to be a takeaway; a long
-    rambling final paragraph is a real structural failure and is left for QA to catch.
-    """
-    text = text.strip()
-    if "\n\n" in text:
-        return text
-
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    if len(lines) < 2:
-        return text
-
-    if len(lines[-1].split()) <= MAX_CLOSING_LINE_WORDS:
-        return "\n".join(lines[:-1]) + "\n\n" + lines[-1]
-
-    return text

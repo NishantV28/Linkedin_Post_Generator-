@@ -1,269 +1,228 @@
+"""
+Editorial core: the judge decides what deserves saying, the writer decides how to say it.
+
+These tests cover the boundary between those two responsibilities and the deterministic
+rules that override the model, since each of those rules exists because a live run
+violated it.
+"""
+
 import pytest
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
 from backend.app.agent.persona.presets import DISTILL_PRESET
 from backend.app.agent.tools.schema import TopicCandidate
-from backend.app.agent.state import JudgeVerdict, DraftPost, QAVerdict
+from backend.app.agent.state import (
+    JudgeVerdict,
+    EditorialScores,
+    WriterContext,
+    DraftPost,
+    QAVerdict,
+)
 from backend.app.agent.nodes.editorial_judge import editorial_judge_node
 from backend.app.agent.nodes.writer import writer_node
 from backend.app.agent.nodes.qa_judge import qa_judge_node
 
-def test_editorial_judge_node_pass():
-    cand = TopicCandidate(
-        id="cand_1",
-        title="Scalable MatMul-free Language Modeling",
-        summary="Novel research removing matrix multiplication from LLM architectures.",
-        url="https://arxiv.org/abs/2406.02528",
-        source="arxiv",
-        published_at="2026-08-08T10:00:00Z"
+
+CANDIDATE = TopicCandidate(
+    id="c1",
+    title="Selective context preference optimization",
+    summary="A benchmark presenting each question in four matched forms.",
+    url="https://arxiv.org/abs/2608.06377",
+    source="arxiv",
+    published_at="2026-08-08T10:00:00Z",
+)
+
+
+def writer_context(**overrides) -> WriterContext:
+    base = dict(
+        obvious_assumption="More retrieved context makes models more reliable.",
+        interesting_turn="The problem is which passages the model trusts, not how many it sees.",
+        core_claim="Weighting passages by reliability recovers accuracy lost to misleading context.",
+        mechanism="Each passage is scored before generation and low-scoring ones are dropped.",
+        evidence=["Four matched conditions per question", "One extra forward pass per passage"],
+        limitations=["The scorer shares blind spots with the generator"],
+        persona_relevance="Fits the persona's interest in retrieval and model behaviour.",
+        why_now="Published this week.",
+        sources=["https://arxiv.org/abs/2608.06377"],
     )
+    base.update(overrides)
+    return WriterContext(**base)
 
-    state = {
-        "persona": DISTILL_PRESET,
-        "agent_id": "test_agent_p3",
-        "current_candidate": cand,
-        "candidates": [cand],
-        "candidate_idx": 0
-    }
 
-    mock_verdict = JudgeVerdict(
-        relevance=9,
-        novelty=9,
-        credibility=9,
-        timeliness=8,
-        decision="pass",
-        reasoning="High quality paper aligning with persona domain."
+def judge_verdict(decision="publish", scores=None, **overrides) -> JudgeVerdict:
+    base = dict(
+        source_type="paper",
+        disqualifier=None,
+        summary="A benchmark for selective trust in retrieved context.",
+        editorial_angle="Retrieval quality is a trust problem, not a coverage problem.",
+        editorial_value="mechanism",
+        scores=EditorialScores(**(scores or dict(
+            evidence_strength=4, editorial_value=4, persona_fit=4, timeliness=4, explainability=4
+        ))),
+        credibility="high",
+        trend_signal="Published this week.",
+        decision=decision,
+        reasoning="Concrete mechanism with verifiable evidence.",
+        writer_context=writer_context(),
     )
-
-    with patch("backend.app.agent.nodes.editorial_judge.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = mock_verdict
-        mock_get_structured.return_value = mock_structured
-
-        res_state = editorial_judge_node(state)
-        assert res_state["judge_verdict"] is not None
-        assert res_state["judge_verdict"].decision == "pass"
-        assert res_state["judge_verdict"].relevance == 9
-
-def test_writer_node_generation():
-    cand = TopicCandidate(
-        id="cand_2",
-        title="Self-Critique Reasoning Models",
-        summary="A new self-critique strategy for step verification in LLMs.",
-        url="https://arxiv.org/abs/2401.00000",
-        source="arxiv",
-        published_at="2026-08-08T10:00:00Z"
-    )
-
-    state = {
-        "persona": DISTILL_PRESET,
-        "agent_id": "test_agent_p3",
-        "current_candidate": cand,
-        "judge_verdict": JudgeVerdict(
-            relevance=9, novelty=9, credibility=9, timeliness=9,
-            decision="pass", reasoning="Great paper."
-        )
-    }
-
-    mock_draft = DraftPost(
-        text="Self-critique reasoning represents a fundamental shift in LLM alignment. Rather than relying purely on benchmark gaming...",
-        rationale_selected="Selected for novel reasoning strategy.",
-        rationale_why_now="Timely research published today."
-    )
-
-    with patch("backend.app.agent.nodes.writer.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = mock_draft
-        mock_get_structured.return_value = mock_structured
-
-        res_state = writer_node(state)
-        assert res_state["draft"] is not None
-        assert "Self-critique reasoning" in res_state["draft"].text
-        assert res_state["draft"].rationale_selected != ""
-
-def test_qa_judge_node_eval():
-    cand = TopicCandidate(
-        id="cand_3",
-        title="Sample Paper",
-        summary="Sample summary",
-        url="https://arxiv.org/abs/2401.00000",
-        source="arxiv",
-        published_at="2026-08-08T10:00:00Z"
-    )
-
-    state = {
-        "persona": DISTILL_PRESET,
-        "agent_id": "test_agent_p3",
-        "current_candidate": cand,
-        # Must satisfy the persona's structural rules, and must not reuse wording from
-        # the worked example, or the programmatic voice checks in qa_judge_node
-        # override the mocked verdict.
-        "draft": DraftPost(
-            text=(
-                "The release notes lead with a 12% latency drop, which is the least "
-                "useful number here.\n\n"
-                "What changed is where the KV cache lives. Instead of holding every layer "
-                "in device memory, the runtime keeps a working set and streams the rest "
-                "from host RAM on demand. Throughput barely moves, but the memory ceiling "
-                "stops being a hard wall.\n\n"
-                "That shifts who can run this. A 70B model on one 24GB card was a "
-                "packaging problem, not a compute one.\n\n"
-                "The unanswered part is contention. Every benchmark here is "
-                "single-request, and nobody has shown what happens when eight sessions "
-                "fight over the same host bandwidth.\n\n"
-                "Memory ceilings are a scheduling problem now, not a hardware one."
-            ),
-            rationale_selected="Relevant",
-            rationale_why_now="Now"
-        )
-    }
-
-    mock_qa = QAVerdict(
-        voice_consistent=True,
-        factually_grounded=True,
-        non_repetitive=True,
-        plain_language_clear=True,
-        verdict="pass",
-        feedback="Looks good."
-    )
-
-    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = mock_qa
-        mock_get_structured.return_value = mock_structured
-
-        res_state = qa_judge_node(state)
-        assert res_state["qa_verdict"] is not None
-        assert res_state["qa_verdict"].verdict == "pass"
+    base.update(overrides)
+    return JudgeVerdict(**base)
 
 
-@pytest.mark.parametrize("scores,expected", [
-    (dict(relevance=9, novelty=8, credibility=9, timeliness=8), "pass"),
-    (dict(relevance=9, novelty=8, credibility=9, timeliness=3), "reject"),   # stale
-    (dict(relevance=9, novelty=8, credibility=5, timeliness=8), "reject"),   # weak source
-    (dict(relevance=4, novelty=8, credibility=9, timeliness=8), "reject"),   # off-topic
+def patch_llm(module_path: str, return_value):
+    """Replace the structured model in one node with a fixed response."""
+    mock = MagicMock()
+    mock.invoke.return_value = return_value
+    return patch(f"backend.app.agent.nodes.{module_path}.get_structured_llm", return_value=mock)
+
+
+# --------------------------------------------------------------------------- judge
+
+
+def test_editorial_judge_passes_a_strong_candidate():
+    state = {"persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE}
+    with patch_llm("editorial_judge", judge_verdict()):
+        result = editorial_judge_node(state)
+
+    verdict = result["judge_verdict"]
+    assert verdict.decision == "publish"
+    assert verdict.writer_context is not None, "a passing verdict must hand the writer an angle"
+
+
+@pytest.mark.parametrize("label,overrides,expected", [
+    ("all clear", {}, "publish"),
+    ("weak evidence", {"scores": dict(evidence_strength=1, editorial_value=4, persona_fit=4, timeliness=4, explainability=4)}, "reject"),
+    ("nothing worth explaining", {"scores": dict(evidence_strength=4, editorial_value=1, persona_fit=4, timeliness=4, explainability=4)}, "reject"),
+    ("wrong persona", {"scores": dict(evidence_strength=4, editorial_value=4, persona_fit=1, timeliness=4, explainability=4)}, "reject"),
+    ("cannot be explained", {"scores": dict(evidence_strength=4, editorial_value=4, persona_fit=4, timeliness=4, explainability=1)}, "reject"),
+    ("low credibility", {"credibility": "low"}, "reject"),
+    ("disqualified", {"disqualifier": "pure_announcement"}, "reject"),
+    ("no editorial value", {"editorial_value": "none"}, "reject"),
 ])
-def test_editorial_judge_enforces_thresholds(scores, expected):
-    """Persona thresholds are enforced in code; a model 'pass' below the bar is overruled."""
-    cand = TopicCandidate(
-        id="cand_t", title="Some paper", summary="s",
-        url="https://arxiv.org/abs/2309.10305", source="arxiv",
-        published_at="2023-09-19T00:00:00Z"
+def test_thresholds_are_enforced_in_code(label, overrides, expected):
+    """A model that says 'publish' while its own scores fail the bar is overruled."""
+    state = {"persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE}
+    with patch_llm("editorial_judge", judge_verdict(decision="publish", **overrides)):
+        result = editorial_judge_node(state)
+    assert result["judge_verdict"].decision == expected, label
+
+
+def test_passing_without_a_handoff_is_rejected():
+    """Without writer_context the writer would invent its own angle."""
+    state = {"persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE}
+    with patch_llm("editorial_judge", judge_verdict(writer_context=None)):
+        result = editorial_judge_node(state)
+    assert result["judge_verdict"].decision == "reject"
+
+
+# -------------------------------------------------------------------------- writer
+
+
+def test_writer_renders_the_judges_angle():
+    draft = DraftPost(
+        text="A post about trusting retrieved passages.",
+        rationale_selected="Fits retrieval interests.",
+        rationale_why_now="Published this week.",
+        sources=["https://wrong.example/invented"],
     )
-    state = {"persona": DISTILL_PRESET, "agent_id": "", "current_candidate": cand}
-
-    model_verdict = JudgeVerdict(**scores, decision="pass", reasoning="Model reasoning.")
-
-    with patch("backend.app.agent.nodes.editorial_judge.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = model_verdict
-        mock_get_structured.return_value = mock_structured
-
-        res_state = editorial_judge_node(state)
-
-    assert res_state["judge_verdict"].decision == expected
-
-
-def test_qa_judge_enforces_persona_structure():
-    """A draft the LLM approves is still rejected if it breaks the persona's structure."""
-    cand = TopicCandidate(
-        id="cand_4",
-        title="Sample Paper",
-        summary="Sample summary",
-        url="https://arxiv.org/abs/2401.00001",
-        source="arxiv",
-        published_at="2026-08-08T10:00:00Z"
-    )
-
-    # Flat summary with no standalone closing line - the failure mode observed in
-    # live runs before the persona structure was enforced.
     state = {
-        "persona": DISTILL_PRESET,
-        "agent_id": "test_agent_p3",
-        "current_candidate": cand,
-        "draft": DraftPost(
-            text=(
-                "Just saw the Baichuan 2 paper. It is an open large-scale language model. "
-                "It adds another openly available model to the ecosystem, which helps keep "
-                "research reproducible and accessible."
-            ),
-            rationale_selected="Relevant",
-            rationale_why_now="Now"
-        )
+        "persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE,
+        "judge_verdict": judge_verdict(), "qa_verdict": None, "retry_count": 0,
+    }
+    with patch_llm("writer", draft):
+        result = writer_node(state)
+
+    assert result["draft"] is not None
+    # Sources are the judge's verified list, never whatever the writer produced.
+    assert result["draft"].sources == ["https://arxiv.org/abs/2608.06377"]
+
+
+def test_writer_refuses_to_run_without_an_editorial_handoff():
+    state = {
+        "persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE,
+        "judge_verdict": judge_verdict(writer_context=None), "qa_verdict": None, "retry_count": 0,
+    }
+    result = writer_node(state)
+    assert result["draft"] is None
+    assert "writer_context" in result["node_error"]
+
+
+# ------------------------------------------------------------------------------ QA
+
+
+# Deliberately unrelated to the persona's worked example: reusing its subject matter
+# trips the borrowed-phrase rule, which is itself the behaviour that rule exists to stop.
+GOOD_DRAFT = (
+    "Batch schedulers for model serving are normally tuned around throughput. The "
+    "assumption is that packing more requests together always pays. This work measures "
+    "what happens at the tail instead. Once a batch mixes short and long prompts, the "
+    "short ones wait for the longest member to finish. Median latency looks healthy "
+    "while the slowest tenth degrades badly. Their change is to group requests by "
+    "expected output length before batching. Prompts of similar length run together, so "
+    "no request waits behind work that takes ten times longer. The scheduler needs a "
+    "length estimate up front, which they take from a small classifier over the prompt. "
+    "That estimate is wrong often enough to matter, and every miss puts one slow request "
+    "back into a fast batch."
+)
+
+
+def qa_state(text):
+    return {
+        "persona": DISTILL_PRESET, "agent_id": "", "current_candidate": CANDIDATE,
+        "judge_verdict": judge_verdict(),
+        "draft": DraftPost(text=text, rationale_selected="r", rationale_why_now="w",
+                           sources=["https://arxiv.org/abs/2608.06377"]),
     }
 
-    approving_verdict = QAVerdict(
-        voice_consistent=True,
-        factually_grounded=True,
-        non_repetitive=True,
-        plain_language_clear=True,
-        verdict="pass",
-        feedback="Looks good."
-    )
 
-    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = approving_verdict
-        mock_get_structured.return_value = mock_structured
-
-        res_state = qa_judge_node(state)
-
-    verdict = res_state["qa_verdict"]
-    assert verdict.verdict == "revise", "structure violation must override the LLM verdict"
-    assert verdict.voice_consistent is False
-    assert "standalone closing line" in verdict.feedback
-
-
-def test_qa_judge_rejects_wording_copied_from_the_style_example():
-    """The worked example demonstrates shape; reusing its sentences is not the voice."""
-    cand = TopicCandidate(
-        id="cand_5", title="Sample", summary="s",
-        url="https://news.ycombinator.com/item?id=1", source="hn",
-        published_at="2026-08-08T10:00:00Z"
-    )
-
-    # Observed in a live run: three of four sentences lifted from the example, which
-    # also made the post factually wrong - the source was a forum thread, not a paper,
-    # and no benchmark score was involved.
-    state = {
-        "persona": DISTILL_PRESET,
-        "agent_id": "test_agent_p3",
-        "current_candidate": cand,
-        "draft": DraftPost(
-            text=(
-                "A new decoding paper landed this week and the framing is familiar.\n\n"
-                "The mechanism: the model scores its own intermediate steps and can "
-                "abandon a chain halfway. The authors report this on three benchmarks "
-                "with consistent gains, and the implementation is a few hundred lines on "
-                "top of a standard sampler.\n\n"
-                "What that buys you is fewer wasted tokens per solved problem, which "
-                "matters more for cost than for accuracy. The reported numbers are modest "
-                "but the direction is clear enough that it is worth watching whether it "
-                "survives contact with the larger models people actually deploy.\n\n"
-                "The open question is whether the scorer stays reliable once the "
-                "generator is stronger than it is, which nobody has demonstrated yet.\n\n"
-                "Cheaper supervision beats a bigger model."
-            ),
-            rationale_selected="Relevant",
-            rationale_why_now="Now"
-        )
-    }
-
-    approving_verdict = QAVerdict(
+def approving_verdict():
+    return QAVerdict(
         voice_consistent=True, factually_grounded=True, non_repetitive=True,
-        plain_language_clear=True,
-        verdict="pass", feedback="Looks good."
+        plain_language_clear=True, single_idea=True, verdict="pass", feedback="Looks good.",
     )
 
-    with patch("backend.app.agent.nodes.qa_judge.get_structured_llm") as mock_get_structured:
-        mock_structured = MagicMock()
-        mock_structured.invoke.return_value = approving_verdict
-        mock_get_structured.return_value = mock_structured
 
-        res_state = qa_judge_node(state)
+def test_qa_passes_a_clean_draft():
+    with patch_llm("qa_judge", approving_verdict()):
+        result = qa_judge_node(qa_state(GOOD_DRAFT))
+    assert result["qa_verdict"].verdict == "pass"
 
-    verdict = res_state["qa_verdict"]
-    assert verdict.verdict == "revise"
-    assert "style example" in verdict.feedback
+
+@pytest.mark.parametrize("label,text,expected_in_feedback", [
+    ("em-dash", GOOD_DRAFT + " The result is clear—for now.", "em-dash"),
+    ("overlong sentence",
+     GOOD_DRAFT + " " + " ".join(["word"] * 40) + ".", "over 25 words"),
+    ("parenthetical gloss",
+     GOOD_DRAFT + " It relies on RAG (a system that fetches external text to help answer).",
+     "brackets"),
+    ("appended takeaway",
+     GOOD_DRAFT + "\n\nThe takeaway: trust beats coverage.", "closing takeaway"),
+    ("too short", "A short note about retrieval that says very little at all.", "too thin"),
+])
+def test_deterministic_rules_override_an_approving_model(label, text, expected_in_feedback):
+    """Each of these rules exists because a live draft violated it."""
+    with patch_llm("qa_judge", approving_verdict()):
+        result = qa_judge_node(qa_state(text))
+
+    verdict = result["qa_verdict"]
+    assert verdict.verdict == "revise", label
+    assert expected_in_feedback in verdict.feedback, f"{label}: {verdict.feedback}"
+
+
+def test_failed_model_checks_are_all_reported_together():
+    """
+    Reporting one fault at a time made the writer fix it and reintroduce another,
+    burning every revision without converging.
+    """
+    failing = QAVerdict(
+        voice_consistent=True, factually_grounded=False, non_repetitive=True,
+        plain_language_clear=False, single_idea=False, verdict="revise",
+        feedback="Several problems.",
+    )
+    with patch_llm("qa_judge", failing):
+        result = qa_judge_node(qa_state(GOOD_DRAFT))
+
+    feedback = result["qa_verdict"].feedback
+    assert "specialist language" in feedback
+    assert "more than one idea" in feedback
+    assert "does not support" in feedback

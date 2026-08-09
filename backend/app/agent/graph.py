@@ -12,8 +12,11 @@ from backend.app.agent.nodes.rejection_logger import log_candidate_rejection
 
 logger = logging.getLogger("autonomous_agent.agent.graph")
 
-# Maximum writer revisions per candidate before the topic is abandoned.
-MAX_REVISIONS = 2
+# Maximum writer revisions per candidate before the topic is abandoned. Three rather
+# than two because a draft must now satisfy four gates at once - plain language,
+# grounding, voice, and length - and live runs showed drafts converging on the third
+# attempt after fixing the first two faults.
+MAX_REVISIONS = 3
 
 def start_cycle(state: AgentState) -> AgentState:
     """Initialize cycle state parameters."""
