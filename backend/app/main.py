@@ -1,7 +1,10 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.core.config import settings
 from backend.app.memory.db import init_db
@@ -85,3 +88,18 @@ def health_check():
         },
         "canPublish": bool(llm_ok),
     }
+
+
+# Serve the Ada Desk dashboard from the same process/port as the API. Registered
+# last so it only catches requests that don't match /health or /api/... above -
+# FastAPI matches routes in the order they're added, and a mount is no exception.
+# The directory only exists inside the Docker image (see Dockerfile); outside of
+# that (e.g. running tests locally from the repo root) it's simply absent, so the
+# mount is skipped rather than crashing startup.
+FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", "/app/frontend"))
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="dashboard")
+    logger.info(f"Serving dashboard from '{FRONTEND_DIR}'.")
+else:
+    logger.info(f"Frontend directory '{FRONTEND_DIR}' not found - running API-only.")
+
