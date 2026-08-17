@@ -14,7 +14,11 @@ const STORAGE_KEYS = {
 
 const DEFAULT_SETTINGS = {
   useRealApi: true,
-  apiUrl: "http://127.0.0.1:8000/api",
+  // Relative path: works whether the dashboard is served by the same FastAPI
+  // process (the default deploy - see Dockerfile/main.py) or opened locally
+  // against a dev server on the same origin. Override in Settings if the API
+  // ever lives on a different host.
+  apiUrl: "/api",
   apiKey: null,
   simulationSpeed: "normal",
   autoCycleInterval: 150,
