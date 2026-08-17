@@ -22,6 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application backend code
 COPY backend /app/backend
 
+# Copy the static dashboard so FastAPI can serve it from the same process/port -
+# Render only routes traffic to one port per service, so a separate Node server
+# for the frontend can't be reached externally alongside the API.
+COPY frontend1/ada-desk /app/frontend
+
 # Set environment variables
 ENV PYTHONPATH=/app/backend
 ENV HOST=0.0.0.0
