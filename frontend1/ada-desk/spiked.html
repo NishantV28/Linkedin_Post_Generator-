@@ -30,6 +30,7 @@
 
 <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden"></div>
 
+<!-- SideNavBar -->
 <aside id="sidebar" class="flex flex-col fixed left-0 top-0 h-full w-64 z-40 bg-surface-container-lowest border-r border-glass-stroke pt-20 pb-8 transition-all">
 <div class="px-6 mb-10">
 <h2 data-persona-name class="font-headline-lg text-primary text-2xl font-bold tracking-tight mb-1">Ada Engine</h2>
@@ -51,7 +52,7 @@
 <a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 relative overflow-hidden transition-all duration-300 rounded-lg mx-3" href="spiked.html">
 <div class="nav-glow absolute inset-0 bg-primary/10 blur-[40px] pointer-events-none"></div>
 <span class="material-symbols-outlined">delete_forever</span>
-<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Rejected</span>
 </a>
 <a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
 <span class="material-symbols-outlined">analytics</span>
@@ -131,16 +132,16 @@ Ada Desk
 <div>
 <div class="flex items-center gap-3 mb-2">
 <span class="material-symbols-outlined text-error text-3xl">delete_forever</span>
-<h2 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">Spiked Topics</h2>
+<h2 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">Rejected Topics</h2>
 </div>
 <p class="font-code-sm text-code-sm text-on-surface-variant max-w-2xl">
-Log of analysis cycles rejected by the Ada Engine heuristics. Items below failed to meet threshold confidence or relevance scores during recent synthesis passes.
+Log of candidate research topics rejected by AI quality judges during analysis cycles.
 </p>
 </div>
 <div class="flex items-center gap-4">
 <div class="relative w-full md:w-64">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-<input id="spike-filter" class="w-full bg-surface border border-glass-stroke rounded-lg py-2 pl-10 pr-4 font-code-sm text-code-sm text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Filter spikes..." type="text"/>
+<input id="spike-filter" class="w-full bg-surface border border-glass-stroke rounded-lg py-2 pl-10 pr-4 font-code-sm text-code-sm text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Filter rejected topics..." type="text"/>
 </div>
 <button class="glass-panel text-on-surface hover:text-primary p-2 rounded-lg transition-colors flex items-center justify-center">
 <span class="material-symbols-outlined">filter_list</span>
@@ -149,157 +150,17 @@ Log of analysis cycles rejected by the Ada Engine heuristics. Items below failed
 </header>
 
 <!-- Stats Overview -->
-<section class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-gutter">
+<section class="grid grid-cols-1 gap-4 md:gap-gutter">
 <div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
 <div class="absolute -right-4 -top-4 w-24 h-24 bg-error/5 rounded-full blur-xl group-hover:bg-error/10 transition-colors"></div>
-<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Total Spiked (24h)</span>
-<span class="font-headline-lg text-headline-lg text-on-surface">142</span>
-</div>
-<div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
-<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors"></div>
-<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Avg. Confidence</span>
-<span class="font-headline-lg text-headline-lg text-on-surface">34.2%</span>
-</div>
-<div class="glass-panel p-6 rounded-xl flex flex-col gap-2 relative overflow-hidden group col-span-2 md:col-span-2 flex-row items-center justify-between">
-<div>
-<span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Primary Rejection Cause</span>
-<span class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Inconclusive Evidence</span>
-</div>
-<div class="h-12 w-32 flex items-end gap-1 opacity-70">
-<div class="w-full bg-surface-container rounded-t-sm h-[20%]"></div>
-<div class="w-full bg-surface-container rounded-t-sm h-[40%]"></div>
-<div class="w-full bg-surface-container rounded-t-sm h-[30%]"></div>
-<div class="w-full bg-surface-container rounded-t-sm h-[70%]"></div>
-<div class="w-full bg-surface-container rounded-t-sm h-[50%]"></div>
-<div class="w-full bg-error/40 rounded-t-sm h-[90%]"></div>
-</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Total Rejected Topics</span>
+<span id="total-spiked-count" class="font-headline-lg text-headline-lg text-on-surface">0</span>
 </div>
 </section>
 
 <!-- Spiked List -->
 <section class="flex flex-col gap-4" id="spike-list">
-<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group">
-<div class="absolute left-0 top-0 bottom-0 w-1 bg-error/50"></div>
-<div class="flex-1 flex flex-col gap-3">
-<div class="flex items-start justify-between md:justify-start gap-4">
-<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Quantum Annealing in Commercial Logistics</h3>
-<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-error/10 text-error border border-error/20 whitespace-nowrap">Low Relevance</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
-Analysis of D-Wave systems implementation for routing optimization. Data suggests marginal improvements over classical heuristics for typical mid-sized fleet operations, lacking significant disruption potential to warrant publication.
-</p>
-<div class="flex flex-wrap items-center gap-4 mt-2">
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">schedule</span>
-<span class="font-code-sm text-code-sm">10:42 AM - Today</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">memory</span>
-<span class="font-code-sm text-code-sm">Node-Alpha-4</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">percent</span>
-<span class="font-code-sm text-code-sm">Confidence: 42%</span>
-</div>
-</div>
-</div>
-<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
-<div class="mb-4">
-<span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Heuristic Output</span>
-<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-error/80 leading-tight">
-&gt; WARN: Topic density low.<br>
-&gt; ERR: Commercial application unverified.<br>
-&gt; ACTION: SPIKE (Threshold &lt; 60)
-</div>
-</div>
-<button data-reevaluate class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
-<span class="material-symbols-outlined text-[16px]">refresh</span>
-Re-Evaluate
-</button>
-</div>
-</article>
-
-<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group">
-<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary/50"></div>
-<div class="flex-1 flex flex-col gap-3">
-<div class="flex items-start justify-between md:justify-start gap-4">
-<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface">CRISPR Off-Target Effects in Agriculture</h3>
-<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20 whitespace-nowrap">Redundant Data</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
-Comprehensive review of unintended genetic modifications in modified crop strains. Findings duplicate insights already published in Cycle 4.1.8 regarding soy and maize variants.
-</p>
-<div class="flex flex-wrap items-center gap-4 mt-2">
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">schedule</span>
-<span class="font-code-sm text-code-sm">08:15 AM - Today</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">memory</span>
-<span class="font-code-sm text-code-sm">Node-Beta-1</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/70">
-<span class="material-symbols-outlined text-[16px]">percent</span>
-<span class="font-code-sm text-code-sm">Confidence: 88%</span>
-</div>
-</div>
-</div>
-<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
-<div class="mb-4">
-<span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Heuristic Output</span>
-<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-secondary/80 leading-tight">
-&gt; MATCH: Similar record found (ID: C4.1.8-92).<br>
-&gt; INFO: Novelty score 0.12.<br>
-&gt; ACTION: SPIKE (Redundant)
-</div>
-</div>
-<button data-merge class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
-<span class="material-symbols-outlined text-[16px]">merge</span>
-Merge Data
-</button>
-</div>
-</article>
-
-<article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group opacity-80 hover:opacity-100 transition-opacity">
-<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-variant"></div>
-<div class="flex-1 flex flex-col gap-3">
-<div class="flex items-start justify-between md:justify-start gap-4">
-<h3 class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface-variant">Deep-Sea Mining Ecological Impact Model</h3>
-<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-surface-variant/30 text-on-surface-variant border border-glass-stroke whitespace-nowrap">Inconclusive Evidence</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant/60 line-clamp-2">
-Simulation of sediment plume dispersion in the Clarion-Clipperton Zone. Sensor data streams incomplete; stochastic model variance exceeds acceptable limits for publication formulation.
-</p>
-<div class="flex flex-wrap items-center gap-4 mt-2">
-<div class="flex items-center gap-1.5 text-on-surface-variant/50">
-<span class="material-symbols-outlined text-[16px]">schedule</span>
-<span class="font-code-sm text-code-sm">Yesterday - 23:59</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/50">
-<span class="material-symbols-outlined text-[16px]">memory</span>
-<span class="font-code-sm text-code-sm">Node-Gamma-7</span>
-</div>
-<div class="flex items-center gap-1.5 text-on-surface-variant/50">
-<span class="material-symbols-outlined text-[16px]">percent</span>
-<span class="font-code-sm text-code-sm">Confidence: 12%</span>
-</div>
-</div>
-</div>
-<div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
-<div class="mb-4">
-<span class="font-label-caps text-[10px] uppercase text-on-surface-variant/50 block mb-1">Heuristic Output</span>
-<div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-on-surface-variant/60 leading-tight">
-&gt; ERR: Insufficient data vectors.<br>
-&gt; WARN: Model variance &gt; 80%.<br>
-&gt; ACTION: SPIKE (Inconclusive)
-</div>
-</div>
-<button disabled class="w-full py-2 bg-transparent border border-glass-stroke/50 rounded text-on-surface-variant/50 font-label-caps text-label-caps uppercase cursor-not-allowed flex items-center justify-center gap-2">
-<span class="material-symbols-outlined text-[16px]">block</span>
-Purged
-</button>
-</div>
-</article>
+<!-- Spiked topics rendered dynamically from FastAPI -->
 </section>
 
 <div class="flex justify-center pb-8">

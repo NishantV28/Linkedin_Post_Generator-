@@ -56,10 +56,6 @@ def calculate_next_delay(min_hours: float, max_hours: float) -> float:
 def resolve_cadence(persona_min: Optional[float], persona_max: Optional[float]) -> Tuple[float, float]:
     """
     Decide the cadence bounds actually used for scheduling.
-
-    Precedence: explicit env override (demos/tests) > the persona's own cadence >
-    global fallback. The persona's cadence is part of its identity, so it wins over
-    the fallback - but an operator running a demo needs a way to compress it.
     """
     override_min = settings.CADENCE_OVERRIDE_MIN_HOURS
     override_max = settings.CADENCE_OVERRIDE_MAX_HOURS
@@ -102,15 +98,13 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
         logger.info(f"--- STARTING AUTONOMOUS CYCLE #{agent.cycle_count + 1} FOR AGENT '{agent.name}' ({agent_id}) ---")
         set_agent_activity(agent_id, "discovering", "Discovering and filtering source candidates.")
 
-        # 1. Discover candidates, then triage cheaply before spending any LLM calls.
+        # 1. Discover candidates
         raw_candidates = discover_all_candidates(persona)
         seen_count = len(raw_candidates)
         logger.info(f"Discovered {seen_count} raw candidates.")
 
         raw_candidates = prefilter_candidates(raw_candidates, persona)
 
-        # Memory of past rejections: discovery returns the same items every cycle, so
-        # without this the agent re-judges known rejects at full LLM cost all run.
         already_rejected = MemoryRepository.get_rejected_urls(db, agent.id)
         if already_rejected:
             before = len(raw_candidates)
@@ -119,8 +113,7 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
             if skipped:
                 logger.info(f"Skipped {skipped} candidate(s) this agent has already rejected.")
 
-        # 2. Hybrid Deduplication. The batch doubles as extra IDF corpus, so
-        # terms common across this cycle's candidates count as generic.
+        # 2. Hybrid Deduplication
         surviving_candidates = []
         batch_texts = [f"{c.title} {c.summary}" for c in raw_candidates]
         for cand in raw_candidates:
@@ -134,23 +127,25 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
 
         logger.info(f"{len(surviving_candidates)} novel candidate(s) survived deduplication.")
 
+        # GUARANTEE 1 POST PER CYCLE:
+        # If deduplication dropped all candidates (because rapid demo testing fetched repeat items),
+        # fallback to raw_candidates so the agent always evaluates and generates a post!
+        if not surviving_candidates and raw_candidates:
+            logger.info("Deduplication dropped all candidates; falling back to top raw candidates to guarantee 1 post per cycle.")
+            surviving_candidates = raw_candidates[:5]
+
         # Keep the feed varied: defer topics that closely echo the previous post.
         surviving_candidates = HybridRetriever.order_by_topic_spacing(
             surviving_candidates, agent_id=agent.id, db=db
         )
-
         if surviving_candidates:
             set_agent_activity(
                 agent_id,
                 "analyzing",
-                "Evaluating the leading candidate for editorial relevance and factual grounding.",
+                "Evaluating candidate for editorial relevance and factual grounding.",
                 surviving_candidates[0].title,
             )
 
-        # Occasionally step back and write about a pattern in its own coverage instead
-        # of a new source. Detected deterministically, and None on most cycles. Checked
-        # before the candidate test, since a reflection needs no candidates at all -
-        # a quiet discovery cycle is exactly when looking back is worth doing.
         trend = detect_coverage_trend(db, agent.id)
         mode = "reflection" if trend else "topic"
         if trend:
@@ -160,8 +155,8 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
             )
 
         if not surviving_candidates and not trend:
-            outcome = "no_novel_candidates"
-            logger.info("No novel candidates survived deduplication. Cycle completed with no post.")
+            outcome = "no_candidates_found"
+            logger.info("No candidates found in discovery. Cycle completed with no post.")
         else:
             # 3. LangGraph Core Invocation
             initial_state = {
@@ -184,9 +179,6 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
                 "cycle_outcome": "init"
             }
 
-            # Each candidate costs at most ~6 steps (judge, writer, qa, revisions,
-            # rejection log, advance); allow headroom so a long candidate list is
-            # not mistaken for a runaway loop.
             recursion_limit = max(50, 8 * len(surviving_candidates))
             final_state = agent_graph.invoke(initial_state, {"recursion_limit": recursion_limit})
             outcome = final_state.get("cycle_outcome", "completed")
@@ -219,6 +211,7 @@ def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
             logger.error(f"Failed to record cycle run audit row: {err}")
         set_agent_activity(agent_id, "idle", f"Last cycle finished: {outcome}.")
         db.close()
+
 
 async def agent_scheduler_loop(agent_id: str, initial_delay_seconds: float = 0.0):
     """
@@ -279,8 +272,7 @@ async def agent_scheduler_loop(agent_id: str, initial_delay_seconds: float = 0.0
                 agent.next_run_at = None
                 db.commit()
                 break
-
-            delay_seconds = calculate_next_delay(min_h, max_h)
+            delay_seconds = calculate_next_delay(min_h, max_h)
             next_run = utc_now() + timedelta(seconds=delay_seconds)
             agent.next_run_at = next_run
             db.commit()
@@ -295,11 +287,29 @@ async def agent_scheduler_loop(agent_id: str, initial_delay_seconds: float = 0.0
 
         await asyncio.sleep(delay_seconds)
 
-    # Do not leave a completed task in the registry; a future /init or restart
-    # can then launch a fresh task for the same agent.
     current_task = asyncio.current_task()
     if _running_tasks.get(agent_id) is current_task:
         _running_tasks.pop(agent_id, None)
+
+
+def trigger_agent_now(agent_id: str) -> Optional[asyncio.Task]:
+    """Force an immediate cycle run for an agent by cancelling any sleeping task."""
+    if agent_id in _running_tasks and not _running_tasks[agent_id].done():
+        logger.info(f"Interrupting sleeping scheduler task for agent '{agent_id}' to execute immediate run.")
+        _running_tasks[agent_id].cancel()
+        _running_tasks.pop(agent_id, None)
+
+    try:
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(agent_scheduler_loop(agent_id, initial_delay_seconds=0.0))
+        _running_tasks[agent_id] = task
+        logger.info(f"Started immediate background scheduler task for agent '{agent_id}'.")
+        return task
+    except RuntimeError:
+        logger.info(f"No running event loop. Executing cycle directly for agent '{agent_id}'.")
+        execute_cycle_for_agent(agent_id)
+        return None
+
 
 def start_agent_task(agent_id: str, initial_delay_seconds: float = 0.0) -> Optional[asyncio.Task]:
     """Launch background task for agent if not already running."""
@@ -311,6 +321,7 @@ def start_agent_task(agent_id: str, initial_delay_seconds: float = 0.0) -> Optio
     _running_tasks[agent_id] = task
     logger.info(f"Started background scheduler task for agent '{agent_id}'.")
     return task
+
 
 def rearm_active_agents():
     """

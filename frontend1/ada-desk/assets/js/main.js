@@ -348,22 +348,32 @@ window.closeModal = closeModal;
 /* Specific Modals                                                        */
 /* ---------------------------------------------------------------------- */
 
+// Helper to toggle Editorial Rationale in modal
+window.toggleRationale = function(id) {
+  const section = document.getElementById(`rationale-section-${id}`);
+  const arrow = document.getElementById(`rationale-arrow-${id}`);
+  if (!section) return;
+  const isHidden = section.classList.contains('hidden');
+  if (isHidden) {
+    section.classList.remove('hidden');
+    if (arrow) arrow.style.transform = 'rotate(180deg)';
+  } else {
+    section.classList.add('hidden');
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
+  }
+};
+
 // 1. Report Reader Modal
 window.openReportModal = function(id) {
   const published = window.adaEngine ? window.adaEngine.getPublished() : [];
-  const r = published.find(item => item.id === id) || {
-    id,
-    title: "Intelligence Report Overview",
-    category: "ANALYSIS",
-    confidence: 98.4,
-    status: "verified",
-    timestamp: new Date().toISOString(),
-    author: "Ada Primary",
-    summary: "Detailed analysis document compiled during autonomous processing.",
-    content: "## Full Article Details\nDetailed technical analysis synthesized across broad intelligence streams.",
-    vectors: ["Vector-Alpha-1"],
-    logs: ["> Analysis completed cleanly"]
-  };
+  const r = published.find(item => item.id === id);
+  if (!r) return;
+
+  const sourcesList = (r.vectors || []).map(v => 
+    `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer" class="bg-surface-container border border-glass-stroke px-2.5 py-1 rounded font-code-sm text-xs text-primary hover:underline flex items-center gap-1 inline-block truncate max-w-full">
+      <span class="material-symbols-outlined text-[12px]">link</span> ${escapeHtml(v)}
+    </a>`
+  ).join('') || '<span class="text-xs text-on-surface-variant">No direct web sources recorded</span>';
 
   const body = `
     <div class="space-y-6 font-body-md text-on-surface">
@@ -378,33 +388,56 @@ window.openReportModal = function(id) {
         </div>
         <div class="flex items-center gap-2 bg-primary/10 border border-primary/30 px-3 py-1.5 rounded text-primary font-code-sm text-sm">
           <span class="material-symbols-outlined text-sm">verified</span>
-          Confidence: ${r.confidence}%
+          Published
         </div>
       </div>
 
-      <div class="bg-surface-container-lowest/70 p-4 rounded-lg border border-glass-stroke font-code-sm text-sm text-on-surface-variant">
-        <strong>Summary:</strong> ${escapeHtml(r.summary)}
+      <!-- 1. Display Generated LinkedIn Post FIRST -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="font-label-caps text-xs text-primary uppercase font-bold tracking-wider flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">post_add</span> Generated LinkedIn Post
+          </span>
+        </div>
+        <div class="bg-surface-container-lowest p-5 rounded-xl border border-glass-stroke prose prose-invert max-w-none text-body-md whitespace-pre-wrap font-sans text-on-surface leading-relaxed select-text">
+          ${escapeHtml(r.content)}
+        </div>
       </div>
 
-      <div class="prose prose-invert max-w-none text-body-md space-y-4">
-        ${formatMarkdown(r.content)}
-      </div>
-
+      <!-- 2. Interactive Button to Toggle Editorial Rationale & Sources -->
       <div class="border-t border-glass-stroke pt-4 space-y-3">
-        <h4 class="font-label-caps text-xs text-on-surface-variant uppercase">Mapped Vector References</h4>
-        <div class="flex flex-wrap gap-2">
-          ${(r.vectors || []).map(v => `<span class="bg-surface-container border border-glass-stroke px-2.5 py-1 rounded font-code-sm text-xs text-primary">${v}</span>`).join('')}
+        <button id="toggle-rationale-btn-${r.id}" onclick="toggleRationale('${r.id}')" class="w-full py-2.5 px-4 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded-lg font-label-caps text-xs text-on-surface hover:text-primary transition-colors flex items-center justify-between group">
+          <span class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-base">psychology</span>
+            <span class="font-bold">View Editorial Rationale & Sources</span>
+          </span>
+          <span class="material-symbols-outlined text-base transition-transform duration-200" id="rationale-arrow-${r.id}">expand_more</span>
+        </button>
+
+        <div id="rationale-section-${r.id}" class="hidden space-y-4 pt-2 transition-all">
+          <div class="bg-surface-container-lowest/80 p-4 rounded-lg border border-glass-stroke font-code-sm text-sm text-on-surface-variant leading-relaxed">
+            <strong class="text-primary block mb-1">Editorial Rationale:</strong>
+            ${escapeHtml(r.summary)}
+          </div>
+
+          <div class="space-y-2">
+            <h4 class="font-label-caps text-xs text-on-surface-variant uppercase">Discovery Sources</h4>
+            <div class="flex flex-wrap gap-2">
+              ${sourcesList}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   `;
 
   const footer = `
-    <button onclick="showToast('Exporting Report as JSON…')" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded text-xs font-label-caps uppercase transition-colors">Export JSON</button>
-    <button onclick="navigator.clipboard.writeText(\`${r.title}\\n\\n${r.summary}\`); showToast('Report copied to clipboard');" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-colors">Copy Text</button>
+    <button onclick="navigator.clipboard.writeText(\`${escapeHtml(r.content).replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`); showToast('Post copied to clipboard');" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-colors flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-sm">content_copy</span> Copy Post Text
+    </button>
   `;
 
-  createModalOverlay("report-modal", `Report Reader — ${r.id}`, body, footer);
+  createModalOverlay("report-modal", `LinkedIn Post Details — ${r.id}`, body, footer);
 };
 
 // 2. Cycle Log Detail Modal
@@ -414,15 +447,15 @@ window.openCycleModal = function(id) {
     id,
     timestamp: new Date().toISOString(),
     status: "COMPLETE",
-    headline: "Cycle execution detail trace",
-    details: ["- Executed vector analysis"]
+    headline: "Autonomous cycle execution detail",
+    details: ["- Vector and source analysis completed"]
   };
 
   const body = `
     <div class="space-y-4 font-code-sm text-sm">
       <div class="flex items-center justify-between border-b border-glass-stroke pb-3">
         <span class="text-primary font-bold text-base">${c.id}</span>
-        <span class="px-2.5 py-1 rounded text-xs font-label-caps ${c.status === 'RUNNING' ? 'bg-primary/10 text-primary border border-primary/30' : c.status === 'FAILED' ? 'bg-error/10 text-error border border-error/30' : 'bg-surface-container text-on-surface-variant border border-glass-stroke'}">${c.status}</span>
+        <span class="px-2.5 py-1 rounded text-xs font-label-caps ${c.status === 'RUNNING' ? 'bg-primary/10 text-primary border border-primary/30' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'bg-error/10 text-error border border-error/30' : 'bg-surface-container text-on-surface-variant border border-glass-stroke'}">${c.status}</span>
       </div>
       <div class="text-on-surface font-bold">&gt; ${escapeHtml(c.headline)}</div>
       <div class="bg-surface-container-lowest p-4 rounded-lg border border-glass-stroke space-y-2 text-on-surface-variant max-h-64 overflow-y-auto">
@@ -438,38 +471,36 @@ window.openCycleModal = function(id) {
 // 3. Spiked Detail Modal
 window.openSpikeModal = function(id) {
   const spiked = window.adaEngine ? window.adaEngine.getSpiked() : [];
-  const s = spiked.find(item => item.id === id) || {
-    id,
-    title: "Spiked Topic Record",
-    category: "Low Relevance",
-    confidence: 42,
-    node: "Node-Alpha-1",
-    heuristic: ["> SPIKE threshold applied"],
-    summary: "Rejection analysis record."
-  };
+  const s = spiked.find(item => item.id === id);
+  if (!s) return;
+
+  const sourceLink = s.sourceUrl 
+    ? `<a href="${escapeHtml(s.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline font-code-sm text-xs truncate block mt-1">${escapeHtml(s.sourceUrl)}</a>`
+    : '';
 
   const body = `
     <div class="space-y-4">
       <div class="flex justify-between items-start border-b border-glass-stroke pb-3">
         <h3 class="text-lg font-bold text-on-surface">${escapeHtml(s.title)}</h3>
-        <span class="bg-error/10 text-error border border-error/30 text-xs px-2.5 py-1 rounded font-label-caps">${s.category}</span>
+        <span class="bg-error/10 text-error border border-error/30 text-xs px-2.5 py-1 rounded font-label-caps">Spiked / Rejected</span>
       </div>
-      <p class="text-sm text-on-surface-variant">${escapeHtml(s.summary)}</p>
+      <div>
+        <strong class="font-label-caps text-xs text-on-surface-variant uppercase">Rejection Rationale:</strong>
+        <p class="text-sm text-on-surface-variant mt-1">${escapeHtml(s.summary)}</p>
+        ${sourceLink}
+      </div>
       <div class="bg-surface p-3 rounded border border-glass-stroke font-code-sm text-xs text-error/90 space-y-1">
+        <div class="font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">Judge Evaluation Scores</div>
         ${(s.heuristic || []).map(h => `<div>${escapeHtml(h)}</div>`).join('')}
       </div>
       <div class="flex gap-4 text-xs text-on-surface-variant font-code-sm">
-        <div>Node: <span class="text-primary">${s.node}</span></div>
-        <div>Confidence: <span class="text-on-surface">${s.confidence}%</span></div>
+        <div>Agent: <span class="text-primary">${s.node}</span></div>
+        <div>Date: <span class="text-on-surface">${s.timestamp}</span></div>
       </div>
     </div>
   `;
 
-  const footer = `
-    <button onclick="window.adaEngine.reEvaluateSpike('${s.id}'); closeModal('spike-modal'); showToast('Re-evaluating ${s.id}…');" class="px-4 py-2 bg-primary text-on-primary text-xs font-label-caps uppercase rounded hover:bg-primary-fixed transition-colors">Re-Evaluate Topic</button>
-  `;
-
-  createModalOverlay("spike-modal", `Spike Topic — ${s.id}`, body, footer);
+  createModalOverlay("spike-modal", `Rejected Topic Audit — ${s.id}`, body);
 };
 
 // Global top bar quick action triggers
@@ -588,76 +619,86 @@ function openSupportModal() {
 }
 
 function openMemoryModal() {
+  const metrics = window.adaEngine ? window.adaEngine.getMetrics() : {};
   const body = `
     <div class="space-y-4 font-code-sm text-xs">
       <div class="flex justify-between items-center border-b border-glass-stroke pb-2">
-        <span class="text-primary">Vector Embedding Index</span>
-        <span class="text-on-surface">14,280 vectors active</span>
+        <span class="text-primary font-bold">SQLite & Chroma Vector Store</span>
+        <span class="text-on-surface">Status: Persistent Database Active</span>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="bg-surface p-3 rounded border border-glass-stroke">
-          <div class="text-on-surface-variant mb-1">Index Dim</div>
-          <div class="text-primary font-bold">1536 (Cosine)</div>
+          <div class="text-on-surface-variant mb-1">LLM Model</div>
+          <div class="text-primary font-bold">${escapeHtml(metrics.llmModel || 'Configured')}</div>
         </div>
         <div class="bg-surface p-3 rounded border border-glass-stroke">
-          <div class="text-on-surface-variant mb-1">Memory Used</div>
-          <div class="text-secondary font-bold">1.4 GB / 12 GB</div>
+          <div class="text-on-surface-variant mb-1">Publish Status</div>
+          <div class="${metrics.canPublish ? 'text-primary' : 'text-error'} font-bold">${metrics.canPublish ? 'Ready to Publish' : 'Check LLM Key'}</div>
         </div>
+      </div>
+      <div class="text-on-surface-variant text-[11px]">
+        Memory persistence stores embeddings in <code class="text-primary">./chroma_data</code> and agent state in SQLite database <code class="text-primary">post_generator.db</code>.
       </div>
     </div>
   `;
-  createModalOverlay("memory-modal", "Vector Memory DB Inspector", body);
+  createModalOverlay("memory-modal", "System Memory Inspector", body);
 }
 
 function openSensorModal() {
+  const metrics = window.adaEngine ? window.adaEngine.getMetrics() : {};
   const body = `
     <div class="space-y-3 font-code-sm text-xs">
       <div class="flex items-center justify-between text-on-surface border-b border-glass-stroke pb-2">
-        <span>Active Sensor Feeds</span>
+        <span>Active Live Data Sources</span>
         <span class="status-dot text-primary"><span class="ping"></span><span class="dot"></span></span>
       </div>
       <div class="space-y-2">
         <div class="flex justify-between p-2 bg-surface rounded border border-glass-stroke">
-          <span>Global Ingest Proxy Alpha</span>
-          <span class="text-primary">ONLINE (0.4ms)</span>
+          <span>Hacker News Algolia Feed</span>
+          <span class="text-primary">ONLINE</span>
         </div>
         <div class="flex justify-between p-2 bg-surface rounded border border-glass-stroke">
-          <span>USPTO Patent Stream</span>
-          <span class="text-primary">ONLINE (1.2ms)</span>
+          <span>arXiv Research Papers API</span>
+          <span class="text-primary">ONLINE</span>
         </div>
         <div class="flex justify-between p-2 bg-surface rounded border border-glass-stroke">
-          <span>CVE Vulnerability Feed</span>
-          <span class="text-primary">ONLINE (0.8ms)</span>
+          <span>GitHub Trending Repos API</span>
+          <span class="text-primary">ONLINE</span>
+        </div>
+        <div class="flex justify-between p-2 bg-surface rounded border border-glass-stroke">
+          <span>Tavily / Web Search</span>
+          <span class="text-primary">ONLINE</span>
         </div>
       </div>
     </div>
   `;
-  createModalOverlay("sensor-modal", "Sensor Stream Monitor", body);
+  createModalOverlay("sensor-modal", "Live Discovery Sources", body);
 }
 
 function openDiagnosticsModal() {
   const metrics = window.adaEngine ? window.adaEngine.getMetrics() : {};
+  const persona = window.AdaPersona?.getPersona() || { name: "Ada Engine", domain: "Autonomous Agent" };
   const body = `
     <div class="space-y-4 font-code-sm text-xs text-on-surface">
       <div class="flex items-center gap-3">
         <span class="material-symbols-outlined text-primary text-3xl">smart_toy</span>
         <div>
-          <div class="font-bold text-base text-primary">Ada Primary Agent</div>
-          <div class="text-on-surface-variant">ID: EDITORIAL_AGENT_01 • AUTONOMOUS MODE</div>
+          <div class="font-bold text-base text-primary">${escapeHtml(persona.name)}</div>
+          <div class="text-on-surface-variant">Domain: ${escapeHtml(persona.domain)} • AUTONOMOUS</div>
         </div>
       </div>
       <div class="grid grid-cols-3 gap-2 border-t border-glass-stroke pt-3 text-center">
         <div class="bg-surface p-2 rounded">
-          <div class="text-[10px] text-on-surface-variant">Compute</div>
-          <div class="text-primary font-bold">${metrics.compute || 78}%</div>
+          <div class="text-[10px] text-on-surface-variant">Total Cycles</div>
+          <div class="text-primary font-bold">${metrics.cycleCount || 0}</div>
         </div>
         <div class="bg-surface p-2 rounded">
-          <div class="text-[10px] text-on-surface-variant">Accuracy</div>
-          <div class="text-primary font-bold">${metrics.accuracy || '99.8%'}</div>
+          <div class="text-[10px] text-on-surface-variant">LLM Model</div>
+          <div class="text-primary font-bold truncate">${escapeHtml(metrics.llmModel || 'Configured')}</div>
         </div>
         <div class="bg-surface p-2 rounded">
-          <div class="text-[10px] text-on-surface-variant">Articles (24h)</div>
-          <div class="text-on-surface font-bold">${metrics.articles24h || 142}</div>
+          <div class="text-[10px] text-on-surface-variant">Published Posts</div>
+          <div class="text-on-surface font-bold">${metrics.articles24h || 0}</div>
         </div>
       </div>
     </div>
@@ -677,25 +718,68 @@ function initHomePage() {
 function updateHomeMetrics() {
   if (!window.adaEngine) return;
   const metrics = window.adaEngine.getMetrics();
-  const activity = metrics.activity || { state: "idle", detail: "Waiting for the next scheduled cycle." };
+  const activity = metrics.activity || { state: "idle", detail: "Waiting for next scheduled cycle." };
+  
   const focus = document.getElementById("current-focus");
   const drafted = document.getElementById("articles-drafted");
-  const confidence = document.getElementById("accuracy-confidence");
+  const llmModelEl = document.getElementById("accuracy-confidence");
   const summary = document.getElementById("agent-activity-summary");
   const feed = document.getElementById("analysis-feed");
-  if (focus) focus.textContent = activity.articleTitle || "No article currently being analyzed";
+
+  const llmStatusVal = document.getElementById("llm-status-value");
+  const nextRunVal = document.getElementById("next-run-value");
+  const cyclesCountVal = document.getElementById("cycles-count-value");
+  const spikedCountVal = document.getElementById("spiked-count-value");
+  const llmModelVal = document.getElementById("llm-model-value");
+
+  if (focus) focus.textContent = activity.articleTitle || "Idle / Monitoring sources";
   if (drafted) drafted.textContent = String(metrics.articles24h || 0);
-  if (confidence) confidence.textContent = "—";
-  if (summary) summary.textContent = activity.articleTitle
-    ? `Currently ${activity.state}: ${activity.articleTitle}. ${activity.detail}`
-    : activity.detail;
+  if (llmModelEl) llmModelEl.textContent = metrics.llmModel || "(Provider Default)";
+  
+  if (summary) {
+    summary.textContent = activity.articleTitle
+      ? `Currently ${activity.state}: "${activity.articleTitle}". ${activity.detail}`
+      : activity.detail;
+  }
+
+  if (llmStatusVal) {
+    llmStatusVal.textContent = metrics.canPublish ? "READY (Valid Key)" : "KEY ERROR";
+    llmStatusVal.className = `font-code-sm text-code-sm ${metrics.canPublish ? 'text-primary' : 'text-error'}`;
+  }
+
+  if (nextRunVal) {
+    if (metrics.nextRunAt) {
+      const d = new Date(metrics.nextRunAt);
+      nextRunVal.textContent = isNaN(d.getTime()) ? metrics.nextRunAt : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      nextRunVal.textContent = metrics.active ? "Calculating..." : "Deactivated";
+    }
+  }
+
+  if (cyclesCountVal) cyclesCountVal.textContent = String(metrics.cycleCount || 0);
+  if (spikedCountVal) spikedCountVal.textContent = String(metrics.spikedCount || 0);
+  if (llmModelVal) llmModelVal.textContent = metrics.llmModel ? metrics.llmModel.split('-')[0].toUpperCase() : "OK";
+
   if (feed) {
-    const title = activity.articleTitle ? `Article: ${escapeHtml(activity.articleTitle)}` : "No article currently being analyzed";
-    feed.innerHTML = `<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-      <span class="text-on-surface-variant opacity-50 select-none">now</span>
-      <span class="text-primary">[${escapeHtml((activity.state || "idle").toUpperCase())}]</span>
-      <span class="text-on-surface">${title} — ${escapeHtml(activity.detail || "Waiting for the next scheduled cycle.")}</span>
-    </div><div data-cursor class="flex gap-4 items-center mt-2"><span class="text-on-surface-variant opacity-50 select-none">live</span><span class="w-2 h-4 bg-primary animate-pulse"></span></div>`;
+    const feedLines = window.adaEngine.getFeedLines ? window.adaEngine.getFeedLines() : (metrics.feed || []);
+    let html = "";
+    if (feedLines && feedLines.length > 0) {
+      feedLines.forEach(line => {
+        html += `<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+          <span class="text-on-surface-variant opacity-50 select-none">live</span>
+          <span class="${line.tagColor || 'text-primary'}">[${escapeHtml(line.tag || 'INFO')}]</span>
+          <span class="text-on-surface">${escapeHtml(line.text)}</span>
+        </div>`;
+      });
+    } else {
+      html = `<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
+        <span class="text-on-surface-variant opacity-50 select-none">now</span>
+        <span class="text-primary">[${escapeHtml((activity.state || "idle").toUpperCase())}]</span>
+        <span class="text-on-surface">${escapeHtml(activity.detail || "Waiting for the next scheduled cycle.")}</span>
+      </div>`;
+    }
+    html += `<div data-cursor class="flex gap-4 items-center mt-2"><span class="text-on-surface-variant opacity-50 select-none">live</span><span class="w-2 h-4 bg-primary animate-pulse"></span></div>`;
+    feed.innerHTML = html;
   }
 }
 
@@ -777,14 +861,12 @@ function renderPublishedList() {
 
   const searchInput = document.getElementById("published-search-input");
   const categorySelect = document.getElementById("published-category-select");
-  const confidenceSelect = document.getElementById("published-confidence-select");
   const badge = document.getElementById("active-filter-badge");
 
   const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
   const cat = categorySelect ? categorySelect.value : "ALL";
-  const minConf = confidenceSelect ? parseFloat(confidenceSelect.value) : 0;
 
-  const isFiltered = Boolean(q || cat !== "ALL" || minConf > 0);
+  const isFiltered = Boolean(q || cat !== "ALL");
   if (badge) {
     if (isFiltered) badge.classList.remove("hidden");
     else badge.classList.add("hidden");
@@ -806,45 +888,38 @@ function renderPublishedList() {
     published = published.filter(r => r.category.toUpperCase() === cat.toUpperCase());
   }
 
-  if (minConf > 0) {
-    published = published.filter(r => r.confidence >= minConf);
-  }
-
   if (published.length === 0) {
     listContainer.innerHTML = `
       <div class="p-12 text-center space-y-3">
-        <span class="material-symbols-outlined text-on-surface-variant text-4xl">filter_alt_off</span>
-        <div class="text-on-surface font-headline-lg text-base">No Matching Published Reports</div>
-        <p class="text-on-surface-variant text-xs max-w-md mx-auto">No intelligence reports match your current filter parameters. Try adjusting your search query, category selection, or confidence threshold.</p>
-        <button onclick="document.getElementById('published-clear-filter')?.click()" class="mt-2 px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded text-xs font-label-caps uppercase text-primary transition-colors">Clear Filters</button>
+        <span class="material-symbols-outlined text-on-surface-variant text-4xl">article</span>
+        <div class="text-on-surface font-headline-lg text-base">No Published Posts Found</div>
+        <p class="text-on-surface-variant text-xs max-w-md mx-auto">No published LinkedIn posts match your current selection, or the backend agent cycle has not yet generated a post. Click "Initiate Cycle" to trigger post generation.</p>
+        ${isFiltered ? `<button onclick="document.getElementById('published-clear-filter')?.click()" class="mt-2 px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded text-xs font-label-caps uppercase text-primary transition-colors">Clear Filters</button>` : ''}
       </div>
     `;
     return;
   }
 
   listContainer.innerHTML = published.map(r => `
-    <div class="group relative grid grid-cols-1 md:grid-cols-[1fr_150px_120px_100px] gap-4 p-4 md:px-6 border-b border-glass-stroke hover:bg-surface-container-highest/30 transition-colors">
-      <div class="absolute left-0 top-0 bottom-0 w-1 ${r.type === 'vulnerability' ? 'bg-primary' : r.type === 'advisory' ? 'bg-secondary' : 'bg-primary'} scale-y-0 group-hover:scale-y-100 transition-transform origin-left"></div>
+    <div class="group relative grid grid-cols-1 md:grid-cols-[1fr_180px_140px_100px] gap-4 p-4 md:px-6 border-b border-glass-stroke hover:bg-surface-container-highest/30 transition-colors">
+      <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-left"></div>
       <div class="flex flex-col justify-center min-w-0">
         <div class="flex items-center gap-2 mb-1">
-          <span class="font-code-sm text-[10px] leading-none ${r.type === 'vulnerability' ? 'text-primary' : 'text-secondary'}">${r.id}</span>
+          <span class="font-code-sm text-[10px] leading-none text-primary">${escapeHtml(r.id.slice(0, 12))}</span>
           <span class="w-1 h-1 rounded-full bg-glass-stroke"></span>
           <span class="font-label-caps text-[10px] leading-none text-on-surface-variant">${r.category}</span>
         </div>
         <h3 onclick="openReportModal('${r.id}')" class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors cursor-pointer">${escapeHtml(r.title)}</h3>
       </div>
-      <div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">${r.timestamp}</div>
+      <div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">${new Date(r.timestamp).toLocaleString()}</div>
       <div class="flex items-center">
-        <div class="flex items-center gap-1.5 ${r.confidence >= 90 ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-secondary/10 border-secondary/20 text-secondary'} border px-2 py-1 rounded font-code-sm text-xs">
-          <span class="material-symbols-outlined text-[14px]">${r.confidence >= 90 ? 'check_circle' : 'warning'}</span>
-          ${r.confidence}%
+        <div class="flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary border px-2 py-1 rounded font-code-sm text-xs">
+          <span class="material-symbols-outlined text-[14px]">link</span>
+          ${(r.vectors || []).length} Sources
         </div>
       </div>
       <div class="hidden md:flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onclick="openCycleModal('CYC-9482.RUN')" class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-lowest transition-colors" title="View Log">
-          <span class="material-symbols-outlined text-sm">terminal</span>
-        </button>
-        <button onclick="openReportModal('${r.id}')" class="p-1.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container-lowest transition-colors" title="Open Report">
+        <button onclick="openReportModal('${r.id}')" class="p-1.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container-lowest transition-colors" title="Open Post Rationale">
           <span class="material-symbols-outlined text-sm">open_in_new</span>
         </button>
       </div>
@@ -862,9 +937,29 @@ function renderSpikedList() {
   if (!container || !window.adaEngine) return;
 
   const spiked = window.adaEngine.getSpiked();
+  
+  // Update header overview cards dynamically
+  const totalSpikedEl = document.getElementById("total-spiked-count");
+  const causeOverviewEl = document.getElementById("latest-rejection-cause");
+  if (totalSpikedEl) totalSpikedEl.textContent = String(spiked.length);
+  if (causeOverviewEl) {
+    causeOverviewEl.textContent = spiked.length > 0 ? (spiked[0].cause || spiked[0].summary || "Rejected Topic") : "No Rejections";
+  }
+
+  if (spiked.length === 0) {
+    container.innerHTML = `
+      <div class="glass-panel p-12 text-center space-y-3 rounded-xl">
+        <span class="material-symbols-outlined text-on-surface-variant text-4xl">check_circle</span>
+        <div class="text-on-surface font-headline-lg text-base">No Rejected Topics Recorded</div>
+        <p class="text-on-surface-variant text-xs max-w-md mx-auto">All evaluated topics in recent cycles passed quality assurance judges, or no cycles have run yet.</p>
+      </div>
+    `;
+    return;
+  }
+
   container.innerHTML = spiked.map(s => `
-    <article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group ${s.purged ? 'opacity-80' : ''}">
-      <div class="absolute left-0 top-0 bottom-0 w-1 ${s.category === 'Redundant Data' ? 'bg-secondary/50' : 'bg-error/50'}"></div>
+    <article class="spike-item glass-panel p-6 rounded-xl pulse-border-error flex flex-col md:flex-row gap-6 relative overflow-hidden group">
+      <div class="absolute left-0 top-0 bottom-0 w-1 bg-error/50"></div>
       <div class="flex-1 flex flex-col gap-3">
         <div class="flex items-start justify-between md:justify-start gap-4">
           <h3 onclick="openSpikeModal('${s.id}')" class="spike-title font-headline-lg-mobile text-headline-lg-mobile text-on-surface cursor-pointer hover:text-primary transition-colors">${escapeHtml(s.title)}</h3>
@@ -873,49 +968,30 @@ function renderSpikedList() {
         <p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">${escapeHtml(s.summary)}</p>
         <div class="flex flex-wrap items-center gap-4 mt-2">
           <div class="flex items-center gap-1.5 text-on-surface-variant/70 font-code-sm text-xs">
-            <span class="material-symbols-outlined text-[16px]">schedule</span> ${s.timestamp}
+            <span class="material-symbols-outlined text-[16px]">schedule</span> ${new Date(s.timestamp).toLocaleString()}
           </div>
           <div class="flex items-center gap-1.5 text-on-surface-variant/70 font-code-sm text-xs">
-            <span class="material-symbols-outlined text-[16px]">memory</span> ${s.node}
-          </div>
-          <div class="flex items-center gap-1.5 text-on-surface-variant/70 font-code-sm text-xs">
-            <span class="material-symbols-outlined text-[16px]">percent</span> Confidence: ${s.confidence}%
+            <span class="material-symbols-outlined text-[16px]">smart_toy</span> Agent: ${escapeHtml(s.node)}
           </div>
         </div>
       </div>
       <div class="md:w-64 flex flex-col justify-between border-t md:border-t-0 md:border-l border-glass-stroke pt-4 md:pt-0 md:pl-6">
         <div class="mb-4">
-          <span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Heuristic Output</span>
+          <span class="font-label-caps text-[10px] uppercase text-on-surface-variant block mb-1">Judge Evaluation</span>
           <div class="bg-surface p-2 rounded border border-glass-stroke font-code-sm text-[11px] text-error/80 leading-tight">
             ${(s.heuristic || []).join('<br>')}
           </div>
         </div>
-        ${s.purged ? `
-          <button disabled class="w-full py-2 bg-transparent border border-glass-stroke/50 rounded text-on-surface-variant/50 font-label-caps text-label-caps uppercase cursor-not-allowed flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-[16px]">block</span> Purged
-          </button>
-        ` : s.merged ? `
-          <button disabled class="w-full py-2 bg-surface-container border border-glass-stroke rounded text-secondary font-label-caps text-label-caps uppercase flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-[16px]">check</span> Merged
-          </button>
-        ` : `
-          <button onclick="handleReEvaluate('${s.id}')" class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-[16px]">refresh</span> Re-Evaluate
-          </button>
-        `}
+        <button onclick="openSpikeModal('${s.id}')" class="w-full py-2 bg-surface-container hover:bg-surface-container-highest border border-glass-stroke rounded text-on-surface font-label-caps text-label-caps uppercase transition-colors flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">visibility</span> View Details
+        </button>
       </div>
     </article>
   `).join('');
 }
 
 window.handleReEvaluate = async function(id) {
-  showToast(`Re-evaluating topic vectors for ${id}…`);
-  const res = await window.AdaAgentAPI.reEvaluateSpike(id);
-  if (res && res.promoted) {
-    showToast(`✓ Promoted ${id} to Published Intelligence Reports!`);
-  } else {
-    showToast(`Updated confidence score for ${id}`);
-  }
+  showToast(`Re-evaluation is disabled for LLM editorial rejections.`);
 };
 
 // Cycle Log Page
@@ -928,14 +1004,24 @@ function renderCycleLogList() {
   if (!container || !window.adaEngine) return;
 
   const cycles = window.adaEngine.getCycles();
+
+  if (cycles.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center text-on-surface-variant font-code-sm text-xs">
+        [NO CYCLE LOGS PERSISTED IN CURRENT AGENT DATABASE]
+      </div>
+    `;
+    return;
+  }
+
   container.innerHTML = cycles.map(c => `
-    <div onclick="openCycleModal('${c.id}')" class="group relative pl-6 border-l ${c.status === 'RUNNING' ? 'border-primary/30' : c.status === 'FAILED' ? 'border-error/30' : 'border-glass-stroke'} hover:border-primary/50 transition-colors py-1 cursor-pointer">
-      <div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 ${c.status === 'RUNNING' ? 'border-primary shadow-[0_0_10px_rgba(78,222,163,0.5)]' : c.status === 'FAILED' ? 'border-error' : 'border-glass-stroke'} rounded-full"></div>
+    <div onclick="openCycleModal('${c.id}')" class="group relative pl-6 border-l ${c.status === 'RUNNING' ? 'border-primary/30' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'border-error/30' : 'border-glass-stroke'} hover:border-primary/50 transition-colors py-1 cursor-pointer">
+      <div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 ${c.status === 'RUNNING' ? 'border-primary shadow-[0_0_10px_rgba(78,222,163,0.5)]' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'border-error' : 'border-glass-stroke'} rounded-full"></div>
       <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-        <span class="text-on-surface-variant font-semibold font-code-sm text-xs">${c.timestamp}</span>
-        <span class="${c.status === 'RUNNING' ? 'text-primary font-bold' : c.status === 'FAILED' ? 'text-error font-bold' : 'text-on-surface font-semibold'} font-code-sm">${c.id}</span>
-        <span class="${c.status === 'RUNNING' ? 'bg-primary/10 text-primary border-primary/20' : c.status === 'FAILED' ? 'bg-error/10 text-error border-error/20' : 'bg-outline-variant/30 text-on-surface-variant border-glass-stroke'} border px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">${c.status === 'RUNNING' ? 'refresh' : c.status === 'FAILED' ? 'error' : 'check_circle'}</span>
+        <span class="text-on-surface-variant font-semibold font-code-sm text-xs">${new Date(c.timestamp).toLocaleString()}</span>
+        <span class="${c.status === 'RUNNING' ? 'text-primary font-bold' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'text-error font-bold' : 'text-on-surface font-semibold'} font-code-sm">${c.id}</span>
+        <span class="${c.status === 'RUNNING' ? 'bg-primary/10 text-primary border-primary/20' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'bg-error/10 text-error border-error/20' : 'bg-outline-variant/30 text-on-surface-variant border-glass-stroke'} border px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px]">${c.status === 'RUNNING' ? 'refresh' : c.status === 'REJECTED' || c.status === 'FAILED' ? 'error' : 'check_circle'}</span>
           ${c.status}
         </span>
       </div>
@@ -960,20 +1046,21 @@ function initApiPage() {
     tester.innerHTML = `
       <div class="flex items-center gap-2 text-primary font-label-caps text-xs">
         <span class="material-symbols-outlined text-sm">play_circle</span>
-        Interactive API Request Tester
+        Interactive FastAPI Endpoint Tester
       </div>
       <div class="flex gap-2">
         <select id="api-test-endpoint" class="bg-surface border border-glass-stroke rounded p-2 text-on-surface font-code-sm text-xs flex-1">
-          <option value="init">POST /api/agent/init — Start Cycle</option>
-          <option value="feed">GET /api/agent/feed — Stream Feed</option>
-          <option value="published">GET /api/reports/published — Published Reports</option>
-          <option value="spiked">GET /api/reports/spiked — Spiked Topics</option>
-          <option value="cycles">GET /api/cycles — Cycle Logs</option>
+          <option value="health">GET /health — Service Health & LLM Status</option>
+          <option value="init">POST /api/agent/init — Initialize/Trigger Agent</option>
+          <option value="feed">GET /api/agent/feed — Read Published Posts</option>
+          <option value="status">GET /api/agent/status — Read Agent Status</option>
+          <option value="rejected">GET /api/agent/rejected — Read Spiked Topics Audit</option>
+          <option value="activity">GET /api/agent/activity — Read Active Cycle Progress</option>
         </select>
         <button id="run-api-test" class="bg-primary text-on-primary font-label-caps text-xs px-4 py-2 rounded hover:bg-primary-fixed transition-colors">Send Request</button>
       </div>
       <div class="bg-black p-4 rounded-lg border border-glass-stroke font-code-sm text-xs overflow-x-auto text-primary">
-        <pre><code id="api-test-result">// Click "Send Request" to test API execution</code></pre>
+        <pre><code id="api-test-result">// Select endpoint and click "Send Request" to test live execution</code></pre>
       </div>
     `;
     container.appendChild(tester);
@@ -981,15 +1068,16 @@ function initApiPage() {
     document.getElementById("run-api-test").addEventListener("click", async () => {
       const endpoint = document.getElementById("api-test-endpoint").value;
       const resultBox = document.getElementById("api-test-result");
-      resultBox.textContent = "// Sending request…";
+      resultBox.textContent = "// Sending request to FastAPI backend…";
 
       try {
         let data;
+        if (endpoint === "health") data = await window.AdaAgentAPI.fetchHealth();
         if (endpoint === "init") data = await window.AdaAgentAPI.initiateCycle();
-        if (endpoint === "feed") data = await window.AdaAgentAPI.fetchFeed();
-        if (endpoint === "published") data = await window.AdaAgentAPI.fetchPublished();
-        if (endpoint === "spiked") data = await window.AdaAgentAPI.fetchSpiked();
-        if (endpoint === "cycles") data = await window.AdaAgentAPI.fetchCycleLog();
+        if (endpoint === "feed") data = await window.AdaAgentAPI._request(`/agent/feed?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
+        if (endpoint === "status") data = await window.AdaAgentAPI._request(`/agent/status?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
+        if (endpoint === "rejected") data = await window.AdaAgentAPI._request(`/agent/rejected?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
+        if (endpoint === "activity") data = await window.AdaAgentAPI._request(`/agent/activity?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
 
         resultBox.textContent = JSON.stringify(data, null, 2);
       } catch (err) {

@@ -54,7 +54,7 @@
 </a>
 <a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="spiked.html">
 <span class="material-symbols-outlined">delete_forever</span>
-<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Rejected</span>
 </a>
 <a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
 <span class="material-symbols-outlined">analytics</span>
@@ -144,29 +144,29 @@ Ada Desk
 <div class="flex-1">
 <div class="flex justify-between items-start mb-4">
 <div>
-<h2 class="font-headline-xl text-headline-xl text-primary font-bold mb-1">Ada Primary</h2>
-<p class="font-code-sm text-code-sm text-on-surface-variant">ID: EDITORIAL_AGENT_01 • STATUS: AUTONOMOUS</p>
+<h2 data-persona-name class="font-headline-xl text-headline-xl text-primary font-bold mb-1">Ada Primary</h2>
+<p id="agent-status-label" class="font-code-sm text-code-sm text-on-surface-variant">AUTONOMOUS PERSONA AGENT</p>
 </div>
-<span class="bg-primary/10 text-primary border border-primary/30 px-3 py-1 rounded font-label-caps text-label-caps flex items-center gap-2 shrink-0">
+<span id="agent-online-badge" class="bg-primary/10 text-primary border border-primary/30 px-3 py-1 rounded font-label-caps text-label-caps flex items-center gap-2 shrink-0">
 <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
 ONLINE
 </span>
 </div>
 <p id="agent-activity-summary" class="font-body-md text-body-md text-on-surface-variant mb-6 max-w-2xl">
-Currently analyzing incoming intelligence feeds, cross-referencing global economic indicators, and drafting synthesized narratives for the morning cycle. Resource allocation is optimal.
+Initializing backend connectivity...
 </p>
 <div class="grid grid-cols-3 gap-4 border-t border-glass-stroke pt-6">
 <div>
 <div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Current Focus</div>
-<div id="current-focus" class="font-code-sm text-code-sm text-primary truncate">Waiting for backend data</div>
+<div id="current-focus" class="font-code-sm text-code-sm text-primary truncate">Waiting for scheduled cycle</div>
 </div>
 <div>
-<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Articles Drafted (24h)</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Published Posts</div>
 <div id="articles-drafted" class="font-code-sm text-code-sm text-on-surface">0</div>
 </div>
 <div>
-<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Accuracy Confidence</div>
-<div id="accuracy-confidence" class="font-code-sm text-code-sm text-primary">—</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">LLM Model</div>
+<div id="accuracy-confidence" class="font-code-sm text-code-sm text-primary truncate">—</div>
 </div>
 </div>
 </div>
@@ -183,36 +183,36 @@ Currently analyzing incoming intelligence feeds, cross-referencing global econom
 <div class="space-y-6">
 <div>
 <div class="flex justify-between mb-2">
-<span class="font-code-sm text-code-sm text-on-surface-variant">Publish Rate</span>
-<span class="font-code-sm text-code-sm text-primary">4.2%</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">LLM Engine Status</span>
+<span id="llm-status-value" class="font-code-sm text-code-sm text-primary">Checking...</span>
 </div>
 <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-<div class="bg-primary h-full w-[4.2%] shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
+<div id="llm-status-bar" class="bg-primary h-full w-[100%] shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
 </div>
 </div>
 <div>
 <div class="flex justify-between mb-2">
-<span class="font-code-sm text-code-sm text-on-surface-variant">Cadence Cycle</span>
-<span class="font-code-sm text-code-sm text-on-surface">~150 min</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">Next Run Cadence</span>
+<span id="next-run-value" class="font-code-sm text-code-sm text-on-surface">Calculating...</span>
 </div>
 <div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-<div class="bg-secondary h-full w-[65%]"></div>
+<div class="bg-secondary h-full w-[100%]"></div>
 </div>
 </div>
 </div>
 </div>
 <div class="grid grid-cols-3 gap-2 mt-8">
 <div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
-<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Compute</div>
-<div class="font-code-sm text-code-sm text-primary">78%</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Cycles</div>
+<div id="cycles-count-value" class="font-code-sm text-code-sm text-primary">0</div>
 </div>
 <div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
-<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">API Calls</div>
-<div class="font-code-sm text-code-sm text-secondary">24k/s</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Rejected</div>
+<div id="spiked-count-value" class="font-code-sm text-code-sm text-secondary">0</div>
 </div>
 <div class="bg-surface-container/50 p-3 rounded border border-glass-stroke text-center">
-<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">Memory</div>
-<div class="font-code-sm text-code-sm text-primary">12GB</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-1 text-[10px]">LLM Key</div>
+<div id="llm-model-value" class="font-code-sm text-code-sm text-primary truncate">Active</div>
 </div>
 </div>
 </div>
@@ -231,34 +231,7 @@ Currently analyzing incoming intelligence feeds, cross-referencing global econom
 </div>
 </div>
 <div id="analysis-feed" class="flex-1 overflow-y-auto no-scrollbar font-code-sm text-code-sm space-y-3 pl-2">
-<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-<span class="text-on-surface-variant opacity-50 select-none">10:42:01</span>
-<span class="text-primary">[DISCOVERY]</span>
-<span class="text-on-surface">Ingesting sub-reddit /r/technology trend spikes regarding new solid-state battery tech.</span>
-</div>
-<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-<span class="text-on-surface-variant opacity-50 select-none">10:42:05</span>
-<span class="text-secondary">[ANALYSIS]</span>
-<span class="text-on-surface-variant">Cross-referencing claims with recent patent filings in USPTO database. 3 matches found.</span>
-</div>
-<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-<span class="text-on-surface-variant opacity-50 select-none">10:42:12</span>
-<span class="text-primary">[DISCOVERY]</span>
-<span class="text-on-surface">Sentiment shift detected in European market futures concerning tech sector.</span>
-</div>
-<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-<span class="text-on-surface-variant opacity-50 select-none">10:42:18</span>
-<span class="text-tertiary">[DRAFTING]</span>
-<span class="text-on-surface-variant">Initiating preliminary article framework: "Solid-State Breakout vs Market Hesitation". Contextual depth: Deep.</span>
-</div>
-<div class="flex gap-4 group hover:bg-surface-container-lowest/50 p-1 -ml-1 rounded transition-colors">
-<span class="text-on-surface-variant opacity-50 select-none">10:42:22</span>
-<span class="text-secondary">[ANALYSIS]</span>
-<span class="text-on-surface-variant">Running bias-check heuristic on draft section 1. Score: 0.04 (Neutral).</span>
-</div>
-<div data-cursor class="flex gap-4 items-center mt-2">
-<span class="text-on-surface-variant opacity-50 select-none">now</span>
-<span class="w-2 h-4 bg-primary animate-pulse"></span>
+<!-- Real live analysis feed rendered via JavaScript -->
 </div>
 </div>
 </div>

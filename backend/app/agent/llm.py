@@ -31,6 +31,7 @@ RETRYABLE_ERRORS = (
     openai.APIConnectionError,
     openai.APITimeoutError,
     openai.InternalServerError,
+    openai.RateLimitError,        # automatic retry when hitting per-minute token rate limits
 )
 
 

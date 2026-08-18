@@ -140,12 +140,20 @@ def editorial_judge_node(state: AgentState) -> AgentState:
             verdict.writer_context.sources = [cand.url] if cand.url else []
 
         s = verdict.scores
+        total_score = s.evidence_strength + s.editorial_value + s.persona_fit + s.timeliness + s.explainability
+        eval_list = state.setdefault("evaluated_candidates", [])
+        eval_list.append({
+            "candidate": cand,
+            "verdict": verdict,
+            "score": total_score
+        })
+
         logger.info(
             f"Editorial Judge for '{cand.title[:45]}...': {verdict.decision.upper()} "
             f"(evidence={s.evidence_strength}, value={s.editorial_value}, fit={s.persona_fit}, "
             f"timely={s.timeliness}, explain={s.explainability}, cred={verdict.credibility}"
             + (f", disqualifier={verdict.disqualifier}" if verdict.disqualifier else "")
-            + ")"
+            + f", Total Score={total_score}/25)"
         )
 
         state["judge_verdict"] = verdict

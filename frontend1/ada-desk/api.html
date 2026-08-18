@@ -50,7 +50,7 @@
 </a>
 <a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="spiked.html">
 <span class="material-symbols-outlined">delete_forever</span>
-<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Rejected</span>
 </a>
 <a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
 <span class="material-symbols-outlined">analytics</span>
@@ -151,7 +151,7 @@ Ada Desk
 <span class="material-symbols-outlined text-primary">power</span>
 <h2 class="font-headline-lg text-headline-lg text-on-surface">Initialize Agent</h2>
 </div>
-<p class="mb-4 text-on-surface-variant">Bootstraps a new agent instance with specific parameters. Returns the instance ID required for subsequent operations.</p>
+<p class="mb-4 text-on-surface-variant">Idempotently initializes an autonomous agent with a persona name and domain, starting the background scheduler loop.</p>
 <div class="flex items-center gap-4 mb-4">
 <span class="bg-primary/20 text-primary font-label-caps text-label-caps px-2 py-1 rounded border border-primary/30">POST</span>
 <code class="font-code-sm text-code-sm text-on-surface bg-surface p-1 rounded px-2 border border-glass-stroke">/api/agent/init</code>
@@ -161,22 +161,18 @@ Ada Desk
 <h3 class="font-label-caps text-label-caps text-on-surface">Request Body</h3>
 <div id="init-req-code" class="code-block rounded-lg p-4 font-code-sm text-code-sm overflow-x-auto">
 <pre><code>{
-  <span class="code-string">"name"</span>: <span class="code-string">"Alpha-1"</span>,
-  <span class="code-string">"type"</span>: <span class="code-string">"research"</span>,
-  <span class="code-string">"config"</span>: {
-    <span class="code-string">"intensity"</span>: <span class="code-keyword">0.8</span>,
-    <span class="code-string">"auto_cycle"</span>: <span class="code-keyword">true</span>
+  <span class="code-string">"persona"</span>: {
+    <span class="code-string">"name"</span>: <span class="code-string">"Distill"</span>,
+    <span class="code-string">"domain"</span>: <span class="code-string">"AI Research"</span>
   }
 }</code></pre>
 </div>
 </div>
 <div class="space-y-4">
-<h3 class="font-label-caps text-label-caps text-on-surface">Response <span class="text-on-surface-variant font-body-sm">(200 OK)</span></h3>
+<h3 class="font-label-caps text-label-caps text-on-surface">Response <span class="text-on-surface-variant font-body-sm">(201 Created)</span></h3>
 <div id="init-res-code" class="code-block rounded-lg p-4 font-code-sm text-code-sm overflow-x-auto border-l-2 border-l-primary">
 <pre><code>{
-  <span class="code-string">"status"</span>: <span class="code-string">"initialized"</span>,
-  <span class="code-string">"instance_id"</span>: <span class="code-string">"agt_x9f2k1"</span>,
-  <span class="code-string">"timestamp"</span>: <span class="code-string">"2024-10-27T10:00:00Z"</span>
+  <span class="code-string">"agentId"</span>: <span class="code-string">"550e8400-e29b-41d4-a716-446655440000"</span>
 }</code></pre>
 </div>
 </div>
@@ -188,10 +184,10 @@ Ada Desk
 <span class="material-symbols-outlined text-primary">rss_feed</span>
 <h2 class="font-headline-lg text-headline-lg text-on-surface">Fetch Feed</h2>
 </div>
-<p class="mb-4 text-on-surface-variant">Retrieves the latest output stream from an active agent instance.</p>
+<p class="mb-4 text-on-surface-variant">Retrieves published posts for a given agentId ordered newest first.</p>
 <div class="flex items-center gap-4 mb-4">
 <span class="bg-secondary/20 text-secondary font-label-caps text-label-caps px-2 py-1 rounded border border-secondary/30">GET</span>
-<code class="font-code-sm text-code-sm text-on-surface bg-surface p-1 rounded px-2 border border-glass-stroke">/api/agent/feed?id={instance_id}</code>
+<code class="font-code-sm text-code-sm text-on-surface bg-surface p-1 rounded px-2 border border-glass-stroke">/api/agent/feed?agentId={agentId}</code>
 </div>
 <div class="mt-6">
 <h3 class="font-label-caps text-label-caps text-on-surface mb-4">Example Request (cURL)</h3>
@@ -200,8 +196,7 @@ Ada Desk
 <span class="material-symbols-outlined text-[18px]">content_copy</span>
 </button>
 <pre><code><span class="code-method">curl</span> -X GET \
-  <span class="code-string">'https://api.adaengine.com/v1/agent/feed?id=agt_x9f2k1&amp;limit=5'</span> \
-  -H <span class="code-string">'Authorization: Bearer YOUR_API_KEY'</span></code></pre>
+  <span class="code-string">'http://127.0.0.1:8000/api/agent/feed?agentId=YOUR_AGENT_ID'</span></code></pre>
 </div>
 </div>
 </section>
@@ -209,21 +204,25 @@ Ada Desk
 <section class="scroll-mt-24" id="reports">
 <div class="flex items-center gap-3 mb-6 border-b border-glass-stroke pb-4">
 <span class="material-symbols-outlined text-primary">article</span>
-<h2 class="font-headline-lg text-headline-lg text-on-surface">Reports &amp; Cycles</h2>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Status &amp; Audits</h2>
 </div>
-<p class="mb-4 text-on-surface-variant">Read-only endpoints that back the Published, Spiked, and Cycle Log pages of this dashboard.</p>
+<p class="mb-4 text-on-surface-variant">Read-only endpoints that back the dashboard status, spiked topic audits, and live cycle activity.</p>
 <div class="glass-panel rounded-xl overflow-hidden divide-y divide-glass-stroke">
 <div class="flex items-center gap-4 p-4">
 <span class="bg-secondary/20 text-secondary font-label-caps text-label-caps px-2 py-1 rounded border border-secondary/30 shrink-0">GET</span>
-<code class="font-code-sm text-code-sm text-on-surface">/api/reports/published</code>
+<code class="font-code-sm text-code-sm text-on-surface">/api/agent/status?agentId={agentId}</code>
 </div>
 <div class="flex items-center gap-4 p-4">
 <span class="bg-secondary/20 text-secondary font-label-caps text-label-caps px-2 py-1 rounded border border-secondary/30 shrink-0">GET</span>
-<code class="font-code-sm text-code-sm text-on-surface">/api/reports/spiked</code>
+<code class="font-code-sm text-code-sm text-on-surface">/api/agent/rejected?agentId={agentId}</code>
 </div>
 <div class="flex items-center gap-4 p-4">
 <span class="bg-secondary/20 text-secondary font-label-caps text-label-caps px-2 py-1 rounded border border-secondary/30 shrink-0">GET</span>
-<code class="font-code-sm text-code-sm text-on-surface">/api/cycles</code>
+<code class="font-code-sm text-code-sm text-on-surface">/api/agent/activity?agentId={agentId}</code>
+</div>
+<div class="flex items-center gap-4 p-4">
+<span class="bg-secondary/20 text-secondary font-label-caps text-label-caps px-2 py-1 rounded border border-secondary/30 shrink-0">GET</span>
+<code class="font-code-sm text-code-sm text-on-surface">/health</code>
 </div>
 </div>
 </section>
@@ -237,13 +236,13 @@ Ada Desk
 <li><a class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2" href="#auth"><span class="w-1 h-1 rounded-full bg-primary/50"></span> Authentication</a></li>
 <li><a class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2" href="#init-agent"><span class="w-1 h-1 rounded-full bg-primary/50"></span> Initialize Agent</a></li>
 <li><a class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2" href="#fetch-feed"><span class="w-1 h-1 rounded-full bg-primary/50"></span> Fetch Feed</a></li>
-<li><a class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2" href="#reports"><span class="w-1 h-1 rounded-full bg-primary/50"></span> Reports &amp; Cycles</a></li>
+<li><a class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2" href="#reports"><span class="w-1 h-1 rounded-full bg-primary/50"></span> Status & Audits</a></li>
 </ul>
 <div class="mt-8 pt-6 border-t border-glass-stroke">
-<h3 class="font-label-caps text-label-caps text-on-surface mb-3">API Status</h3>
+<h3 class="font-label-caps text-label-caps text-on-surface mb-3">Backend Service</h3>
 <div class="flex items-center gap-2 text-body-sm">
 <span class="status-dot text-primary"><span class="ping"></span><span class="dot"></span></span>
-<span class="text-on-surface-variant">Demo mode — not yet connected</span>
+<span class="text-on-surface-variant">Connected to FastAPI (Port 8000)</span>
 </div>
 </div>
 </div>

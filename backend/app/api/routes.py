@@ -7,7 +7,7 @@ from datetime import timedelta, timezone
 
 from backend.app.memory.db import get_db
 from backend.app.memory.models import AgentModel, PostModel, RejectedTopicModel, utc_now
-from backend.app.core.scheduler import calculate_next_delay, get_agent_activity, resolve_cadence, start_agent_task
+from backend.app.core.scheduler import calculate_next_delay, get_agent_activity, resolve_cadence, start_agent_task, trigger_agent_now
 from backend.app.agent.persona.presets import get_preset_by_name_or_domain
 from backend.app.schemas.agent import (
     InitRequest,
@@ -36,7 +36,8 @@ def format_iso8601(dt) -> str:
 async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     """
     Initialize a persona agent.
-    Idempotency guard: If an active agent with the same name and domain exists, returns its agentId.
+    Idempotency guard: If an active agent with the same name and domain exists,
+    triggers an immediate cycle run and returns its agentId.
     Otherwise, creates a new agent record in SQLite.
     """
     persona_info = req.persona
@@ -49,25 +50,18 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
             detail="Both 'name' and 'domain' must be provided in persona."
         )
 
-    # Idempotency guard. Matched case-insensitively: "distill"/"AI research" and
-    # "Distill"/"AI Research" are the same persona, and treating them as two spawns
-    # a second scheduler loop that competes for the same API quota.
+    # Idempotency / Reactivation guard. Matched case-insensitively.
     existing_agent = db.query(AgentModel).filter(
         func.lower(AgentModel.name) == name.lower(),
-        func.lower(AgentModel.domain) == domain.lower(),
-        AgentModel.active == True
+        func.lower(AgentModel.domain) == domain.lower()
     ).first()
 
     if existing_agent:
-        # Ensure task is running
-        if existing_agent.next_run_at:
-            scheduled_at = existing_agent.next_run_at
-            if scheduled_at.tzinfo is None:
-                scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
-            delay = max(0.0, (scheduled_at - utc_now()).total_seconds())
-        else:
-            delay = 0.0
-        start_agent_task(existing_agent.id, initial_delay_seconds=delay)
+        existing_agent.active = True
+        existing_agent.created_at = utc_now()
+        existing_agent.next_run_at = utc_now()
+        db.commit()
+        trigger_agent_now(existing_agent.id)
         return InitResponse(agentId=existing_agent.id)
 
     # Generate full persona configuration from presets + overrides
@@ -94,7 +88,7 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     db.refresh(new_agent)
 
     # Launch autonomous background scheduler task for new agent
-    start_agent_task(new_agent.id, initial_delay_seconds=first_delay)
+    trigger_agent_now(new_agent.id)
 
     return InitResponse(agentId=new_agent.id)
 

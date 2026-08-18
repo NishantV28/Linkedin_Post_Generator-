@@ -50,7 +50,7 @@
 </a>
 <a data-page-link="spiked" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-300 rounded-lg mx-3" href="spiked.html">
 <span class="material-symbols-outlined">delete_forever</span>
-<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Spiked</span>
+<span class="font-headline-lg-mobile text-[12px] tracking-widest uppercase">Rejected</span>
 </a>
 <a data-page-link="cycle-log" class="nav-link flex items-center gap-3 text-on-surface-variant hover:text-on-surface py-3 px-6 relative overflow-hidden transition-all duration-300 rounded-lg mx-3" href="cycle-log.html">
 <div class="nav-glow absolute inset-0 bg-primary/10 blur-[40px] pointer-events-none"></div>
@@ -149,81 +149,7 @@ Ada Desk
 <div class="w-4 h-4"></div>
 </div>
 <div class="terminal-scroll p-6 font-code-sm text-code-sm space-y-6">
-<div class="group relative pl-6 border-l border-primary/30 py-1">
-<div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 border-primary rounded-full shadow-[0_0_10px_rgba(78,222,163,0.5)]"></div>
-<div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-<span class="text-on-surface-variant font-semibold text-xs">2023-10-27T14:32:01.045Z</span>
-<span class="text-primary font-bold">CYC-9482.RUN</span>
-<span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">refresh</span>
-RUNNING
-</span>
-</div>
-<div class="text-on-surface font-semibold mb-1">&gt; Initiating deep scan across 14 primary data vectors.</div>
-<div class="text-on-surface-variant pl-4 border-l border-glass-stroke ml-2 space-y-1 mt-2">
-<div>[SYS] Allocating secondary computational nodes... [OK]</div>
-<div>[NET] Establishing secure stream to global ingest... [OK]</div>
-<div id="scan-progress" class="text-primary animate-pulse">_ Scanning cluster beta-9 (45% complete)</div>
-</div>
-</div>
-<div class="group relative pl-6 border-l border-glass-stroke hover:border-on-surface-variant/30 transition-colors py-1">
-<div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 border-glass-stroke rounded-full"></div>
-<div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-<span class="text-on-surface-variant font-semibold text-xs">2023-10-27T14:15:22.110Z</span>
-<span class="text-on-surface font-semibold">CYC-9481.CMP</span>
-<span class="bg-outline-variant/30 text-on-surface-variant border border-glass-stroke px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">check_circle</span>
-COMPLETE
-</span>
-</div>
-<div class="text-on-surface font-semibold">&gt; Scanned 42 sources, identified 3 potential vectors.</div>
-<div class="text-on-surface-variant pl-4 border-l border-glass-stroke ml-2 mt-2">
-<div>- Vector Alpha mapped to target demographic profile.</div>
-<div>- Vector Gamma requires secondary verification (queued).</div>
-<div>- Cycle closed normally. Duration: 1m 45s.</div>
-</div>
-</div>
-<div class="group relative pl-6 border-l border-glass-stroke hover:border-on-surface-variant/30 transition-colors py-1">
-<div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 border-glass-stroke rounded-full"></div>
-<div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-<span class="text-on-surface-variant font-semibold text-xs">2023-10-27T13:45:05.992Z</span>
-<span class="text-on-surface font-semibold">CYC-9480.CMP</span>
-<span class="bg-outline-variant/30 text-on-surface-variant border border-glass-stroke px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">check_circle</span>
-COMPLETE
-</span>
-</div>
-<div class="text-on-surface font-semibold">&gt; Routine synchronization with remote node Alpha-7.</div>
-</div>
-<div class="group relative pl-6 border-l border-error/30 py-1">
-<div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 border-error rounded-full"></div>
-<div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-<span class="text-on-surface-variant font-semibold text-xs">2023-10-27T12:05:11.402Z</span>
-<span class="text-error font-bold">CYC-9479.ERR</span>
-<span class="bg-error/10 text-error border border-error/20 px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">error</span>
-FAILED
-</span>
-</div>
-<div class="text-on-surface font-semibold mb-1">&gt; Attempted to parse encrypted payload from unknown source.</div>
-<div class="text-error pl-4 border-l border-error/20 ml-2 mt-2">
-<div>[ERR] Decryption protocol mismatch. Handshake rejected.</div>
-<div>[SYS] Terminating cycle to prevent cascade failure.</div>
-<div>[LOG] Core dumped to /var/log/ada/crash_9479.dmp</div>
-</div>
-</div>
-<div class="group relative pl-6 border-l border-transparent py-1">
-<div class="absolute -left-[5px] top-1.5 w-[9px] h-[9px] bg-surface border-2 border-glass-stroke rounded-full"></div>
-<div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-2">
-<span class="text-on-surface-variant font-semibold text-xs">2023-10-27T11:30:00.000Z</span>
-<span class="text-on-surface font-semibold">CYC-9478.CMP</span>
-<span class="bg-outline-variant/30 text-on-surface-variant border border-glass-stroke px-2 py-0.5 rounded font-label-caps text-label-caps tracking-widest inline-flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">check_circle</span>
-COMPLETE
-</span>
-</div>
-<div class="text-on-surface font-semibold">&gt; Daily index rebuild and garbage collection initialized.</div>
-</div>
+<!-- Live cycle logs rendered dynamically from FastAPI -->
 </div>
 </div>
 </div>

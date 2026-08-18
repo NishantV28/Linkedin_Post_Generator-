@@ -18,6 +18,8 @@ logger = logging.getLogger("autonomous_agent.agent.graph")
 # attempt after fixing the first two faults.
 MAX_REVISIONS = 3
 
+from backend.app.agent.state import AgentState, WriterContext
+
 def start_cycle(state: AgentState) -> AgentState:
     """Initialize cycle state parameters."""
     state.setdefault("mode", "topic")
@@ -25,6 +27,8 @@ def start_cycle(state: AgentState) -> AgentState:
     state["retry_count"] = 0
     state["rejected_count"] = 0
     state["rejected_this_cycle"] = []
+    state["evaluated_candidates"] = []
+    state["forced_publish"] = False
     state["node_error"] = None
     state["published_post"] = None
     state["cycle_outcome"] = "in_progress"
@@ -88,9 +92,37 @@ def advance_candidate(state: AgentState) -> AgentState:
         state["current_candidate"] = candidates[idx]
         logger.info(f"Advancing to candidate [{idx}/{len(candidates)}]: '{candidates[idx].title[:40]}...'")
     else:
-        state["current_candidate"] = None
-        state["cycle_outcome"] = "all_rejected"
-        logger.info("All candidate topics evaluated and exhausted for this cycle.")
+        # All candidate topics evaluated for this cycle.
+        # If no post was published yet, select the highest-scoring candidate to force publication!
+        evaluated = state.get("evaluated_candidates", [])
+        if evaluated and not state.get("published_post"):
+            evaluated.sort(key=lambda x: x["score"], reverse=True)
+            best = evaluated[0]
+            best_cand = best["candidate"]
+            best_verdict = best["verdict"]
+
+            best_verdict.decision = "publish"
+            if not best_verdict.writer_context:
+                best_verdict.writer_context = WriterContext(
+                    obvious_assumption=f"Core architectural pattern in {best_cand.title}",
+                    interesting_turn=best_cand.summary[:250] if best_cand.summary else "Key technical finding and practical implementation",
+                    core_claim=best_cand.title[:150],
+                    mechanism=best_cand.summary[:350] if best_cand.summary else "Technical breakdown and mechanism",
+                    evidence=[best_cand.url] if best_cand.url else [],
+                    limitations=[],
+                    persona_relevance=f"Relevant to {state['persona'].name}",
+                    why_now="Selected as highest-scoring candidate for this cycle.",
+                    sources=[best_cand.url] if best_cand.url else []
+                )
+
+            state["current_candidate"] = best_cand
+            state["judge_verdict"] = best_verdict
+            state["forced_publish"] = True
+            logger.info(f"Forcing publication of highest-scoring candidate: '{best_cand.title[:45]}...' (Score: {best['score']}/25)")
+        else:
+            state["current_candidate"] = None
+            state["cycle_outcome"] = "all_rejected"
+            logger.info("All candidate topics evaluated and exhausted for this cycle.")
 
     return state
 
@@ -108,7 +140,7 @@ def route_after_judge(state: AgentState) -> Literal["writer", "log_rejection", "
     if state.get("node_error"):
         return "abort_cycle"
     verdict = state.get("judge_verdict")
-    if verdict and verdict.decision.lower() == "pass":
+    if verdict and verdict.decision.lower() in ("pass", "publish"):
         return "writer"
     return "log_rejection"
 
@@ -128,6 +160,10 @@ def route_after_qa(state: AgentState) -> Literal["publish", "writer", "reflectio
     if qa and qa.verdict.lower() == "pass":
         return "publish"
 
+    if state.get("forced_publish"):
+        logger.info("Forced publish candidate bypassing strict QA rejection to guarantee 1 post per cycle.")
+        return "publish"
+
     # `retry_count` is incremented by the writing node, so it reflects revisions
     # already performed; allow up to MAX_REVISIONS of them.
     if qa and qa.verdict.lower() == "revise" and retry_count < MAX_REVISIONS:
@@ -142,7 +178,9 @@ def route_after_qa(state: AgentState) -> Literal["publish", "writer", "reflectio
 
     return "log_rejection"
 
-def route_after_advance(state: AgentState) -> Literal["editorial_judge", "__end__"]:
+def route_after_advance(state: AgentState) -> Literal["writer", "editorial_judge", "__end__"]:
+    if state.get("forced_publish"):
+        return "writer"
     if state.get("current_candidate"):
         return "editorial_judge"
     return END
