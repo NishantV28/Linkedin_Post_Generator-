@@ -54,6 +54,43 @@ class MemoryRepository:
         return post
 
     @staticmethod
+    def update_post(
+        db: Session,
+        post_id: str,
+        new_text: str,
+        new_rationale: Optional[str] = None
+    ) -> Optional[PostModel]:
+        """
+        Updates an existing post's text (and optionally rationale) in SQLite and syncs updated vector embedding to ChromaDB.
+        """
+        post = db.query(PostModel).filter(PostModel.id == post_id).first()
+        if not post:
+            return None
+
+        post.text = new_text
+        if new_rationale is not None:
+            post.rationale = new_rationale
+
+        db.commit()
+        db.refresh(post)
+
+        try:
+            embed_text = f"{post.topic_title or ''} {new_text}"
+            vector = embed(embed_text)
+            add_post_vector(
+                agent_id=post.agent_id,
+                post_id=post.id,
+                text=embed_text,
+                embedding=vector,
+                metadata={"topic_title": post.topic_title or "", "type": "published"}
+            )
+        except Exception as e:
+            logger.warning(f"Could not update vector store embedding for post {post_id}: {e}")
+
+        logger.info(f"Updated post {post.id} with new reframed text.")
+        return post
+
+    @staticmethod
     def save_rejection(
         db: Session,
         agent_id: str,

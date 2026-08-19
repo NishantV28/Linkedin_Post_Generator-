@@ -222,7 +222,18 @@ const AdaAgentAPI = {
   async fetchSpiked() { await this.sync(); return window.adaEngine.getSpiked(); },
   async fetchCycleLog() { await this.sync(); return window.adaEngine.getCycles(); },
   async reEvaluateSpike() { throw new Error("Re-evaluation is not supported; rejected topics were filtered by LLM quality judges."); },
-  async mergeSpike() { throw new Error("Merge operation is not supported for rejected topics."); }
+  async mergeSpike() { throw new Error("Merge operation is not supported for rejected topics."); },
+
+  async reframePost(postId, feedback) {
+    if (!postId || !feedback) throw new Error("Post ID and feedback text are required.");
+    const result = await this._request("/agent/reframe", {
+      method: "POST",
+      body: JSON.stringify({ postId, feedback })
+    });
+    // Sync latest state
+    await this.sync();
+    return result;
+  }
 };
 
 window.AdaAgentAPI = AdaAgentAPI;

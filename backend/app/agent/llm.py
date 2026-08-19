@@ -147,12 +147,8 @@ def get_structured_llm(schema: Type[Any], temperature: float = 0.2, model_name: 
         return primary
     return primary.with_fallbacks(alternates)
 
-def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatOpenAI:
-    """
-    Returns a configured LangChain Chat model.
-    Prioritizes GROQ_API_KEY (ultra-fast inference via Groq API) if present,
-    otherwise falls back to OPENAI_API_KEY.
-    """
+def _build_raw_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatOpenAI:
+    """Instantiate a raw ChatOpenAI client."""
     groq_api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
     openai_api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY")
 
@@ -181,3 +177,20 @@ def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> ChatO
     raise ValueError(
         "No LLM API key provided. Please add GROQ_API_KEY or OPENAI_API_KEY to your .env file."
     )
+
+
+def get_llm(model_name: Optional[str] = None, temperature: float = 0.7) -> Any:
+    """
+    Returns a configured LangChain Chat model with fallback support.
+    Prioritizes GROQ_API_KEY if present, otherwise falls back to OPENAI_API_KEY.
+    """
+    primary = _build_raw_llm(model_name=model_name, temperature=temperature)
+
+    if model_name is not None:
+        return primary
+
+    fallbacks = [_build_raw_llm(name, temperature=temperature) for name in fallback_models()]
+    if not fallbacks:
+        return primary
+    return primary.with_fallbacks(fallbacks)
+

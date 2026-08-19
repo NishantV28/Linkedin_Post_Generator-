@@ -181,3 +181,36 @@ VITE_API_BASE=https://your-api.example.com
 ```
 
 Restart Vite after changing this value. The FastAPI application currently permits browser requests from all origins; restrict the CORS configuration before exposing the service publicly.
+
+## 11. Topic Hashtags & Human Feedback Reframing
+
+### Topic Hashtags Inclusion
+All generated and reframed LinkedIn posts automatically conclude with 3 to 5 relevant topic `#` hashtags (e.g. `#AI #MachineLearning #TechTrends`) related to the persona domain and post theme.
+
+### Human Feedback & Post Reframing
+Users can review and reframe any post directly through the UI or REST API:
+
+1. **Dashboard UI**:
+   - Navigate to the **Published Intelligence** page (`published.html`).
+   - Click on any post to open the details modal.
+   - Enter revision feedback or restructuring instructions into the **Human Review & Refine Post** box (e.g., *"Make it punchier with bullet points"*, *"Emphasize practical developer takeaways"*).
+   - Click **Reframe Post with Feedback**. The post dynamically reframes in real-time and updates in SQLite and ChromaDB.
+
+2. **REST API Endpoint**:
+   - `POST /api/agent/reframe`
+   - Request Payload:
+     ```json
+     {
+       "postId": "<post-uuid>",
+       "feedback": "Restructure with concise bullets and highlight takeaways"
+     }
+     ```
+   - Response Payload:
+     ```json
+     {
+       "postId": "<post-uuid>",
+       "text": "Reframed post text concluding with #Hashtags",
+       "rationale": "Updated rationale with feedback trace"
+     }
+     ```
+

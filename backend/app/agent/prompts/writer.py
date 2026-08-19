@@ -42,7 +42,7 @@ mechanism, finding, failure or tradeoff.
 
 HOW TO END
 
-End when the mechanism has been explained. The point being made IS the ending.
+End when the mechanism has been explained, followed by a new line with 3 to 5 relevant topic hashtags (keywords related to the post topic/domain, formatted with # like #AI #MachineLearning #TechTrends).
 
 Do NOT add a standalone conclusion, a summary paragraph, a "key takeaway", a punchline,
 "this shows that...", "the future of AI...", or a generic final thought.
@@ -92,7 +92,7 @@ HARD RULES
 1. Never use: {forbidden_phrases}
 2. No filler.
 3. No emoji.
-4. No hashtags.
+4. Include 3 to 5 relevant topic hashtags (e.g. #AI #MachineLearning #TechTrends) at the very end of the post.
 5. No bullet-point listicles.
 6. No em-dashes.
 7. Never narrate your reading process.

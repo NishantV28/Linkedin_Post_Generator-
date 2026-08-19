@@ -45,3 +45,15 @@ class RejectedTopicItem(BaseModel):
 
 class RejectedTopicsResponse(BaseModel):
     rejectedTopics: List[RejectedTopicItem]
+
+
+class ReframeRequest(BaseModel):
+    postId: str = Field(..., description="The ID of the post to reframe")
+    feedback: str = Field(..., description="Human review or feedback instructions to reframe the post")
+
+
+class ReframeResponse(BaseModel):
+    postId: str = Field(..., description="The post ID")
+    text: str = Field(..., description="The newly reframed post text")
+    rationale: str = Field(..., description="The updated or preserved rationale")
+

@@ -7,8 +7,10 @@ from datetime import timedelta, timezone
 
 from backend.app.memory.db import get_db
 from backend.app.memory.models import AgentModel, PostModel, RejectedTopicModel, utc_now
+from backend.app.memory.repository import MemoryRepository
 from backend.app.core.scheduler import calculate_next_delay, get_agent_activity, resolve_cadence, start_agent_task, trigger_agent_now
 from backend.app.agent.persona.presets import get_preset_by_name_or_domain
+from backend.app.agent.reframer import reframe_post
 from backend.app.schemas.agent import (
     InitRequest,
     InitResponse,
@@ -17,7 +19,9 @@ from backend.app.schemas.agent import (
     StatusResponse,
     AgentStatusInfo,
     RejectedTopicsResponse,
-    RejectedTopicItem
+    RejectedTopicItem,
+    ReframeRequest,
+    ReframeResponse,
 )
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -192,3 +196,73 @@ def get_rejected_topics(agentId: Optional[str] = Query(None), db: Session = Depe
             )
         )
     return RejectedTopicsResponse(rejectedTopics=result)
+
+
+@router.post("/reframe", response_model=ReframeResponse)
+def reframe_existing_post(req: ReframeRequest, db: Session = Depends(get_db)):
+    """
+    Reframe / restructure an existing post based on human feedback.
+    Applies user feedback, ensures relevant hashtags are included, and updates the database record.
+    """
+    post_id = req.postId.strip()
+    feedback = req.feedback.strip()
+
+    if not post_id or not feedback:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both 'postId' and 'feedback' must be provided."
+        )
+
+    post = db.query(PostModel).filter(PostModel.id == post_id).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post with id '{post_id}' not found."
+        )
+
+    # Get persona details
+    persona_name = "Ada Engine"
+    persona_domain = "AI Research"
+    persona_bio = None
+
+    if post.agent_id:
+        agent = db.query(AgentModel).filter(AgentModel.id == post.agent_id).first()
+        if agent:
+            persona_name = agent.name or persona_name
+            persona_domain = agent.domain or persona_domain
+            if agent.persona_json:
+                try:
+                    p_data = json.loads(agent.persona_json)
+                    persona_bio = p_data.get("bio")
+                except Exception:
+                    pass
+
+    try:
+        new_text = reframe_post(
+            original_text=post.text,
+            user_feedback=feedback,
+            persona_name=persona_name,
+            persona_domain=persona_domain,
+            persona_bio=persona_bio
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reframe post: {str(e)}"
+        )
+
+    # Update in DB & ChromaDB
+    updated_rationale = f"{post.rationale}\n\n[Human Feedback Revision]: {feedback}" if post.rationale else f"[Human Feedback Revision]: {feedback}"
+    updated_post = MemoryRepository.update_post(
+        db=db,
+        post_id=post_id,
+        new_text=new_text,
+        new_rationale=updated_rationale
+    )
+
+    return ReframeResponse(
+        postId=post_id,
+        text=updated_post.text,
+        rationale=updated_post.rationale or ""
+    )
+

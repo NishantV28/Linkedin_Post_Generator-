@@ -384,7 +384,7 @@ window.openReportModal = function(id) {
             <span class="text-on-surface-variant">•</span>
             <span class="font-label-caps text-xs text-on-surface-variant">${r.category}</span>
           </div>
-          <h2 class="text-xl font-bold text-on-surface">${escapeHtml(r.title)}</h2>
+          <h2 id="modal-post-title-${r.id}" class="text-xl font-bold text-on-surface">${escapeHtml(r.title)}</h2>
         </div>
         <div class="flex items-center gap-2 bg-primary/10 border border-primary/30 px-3 py-1.5 rounded text-primary font-code-sm text-sm">
           <span class="material-symbols-outlined text-sm">verified</span>
@@ -399,12 +399,29 @@ window.openReportModal = function(id) {
             <span class="material-symbols-outlined text-sm">post_add</span> Generated LinkedIn Post
           </span>
         </div>
-        <div class="bg-surface-container-lowest p-5 rounded-xl border border-glass-stroke prose prose-invert max-w-none text-body-md whitespace-pre-wrap font-sans text-on-surface leading-relaxed select-text">
+        <div id="post-content-${r.id}" class="bg-surface-container-lowest p-5 rounded-xl border border-glass-stroke prose prose-invert max-w-none text-body-md whitespace-pre-wrap font-sans text-on-surface leading-relaxed select-text">
           ${escapeHtml(r.content)}
         </div>
       </div>
 
-      <!-- 2. Interactive Button to Toggle Editorial Rationale & Sources -->
+      <!-- 2. Human Feedback & Reframe/Restructure Feature -->
+      <div class="bg-surface-container-lowest/90 p-4 rounded-xl border border-glass-stroke space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="font-label-caps text-xs text-secondary uppercase font-bold tracking-wider flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">rate_review</span> Human Review & Refine Post
+          </span>
+          <span class="text-[11px] text-on-surface-variant font-code-sm">AI Reframing Assistant</span>
+        </div>
+        <p class="text-xs text-on-surface-variant">Provide feedback or instructions to restructure, re-angle, or polish this post (e.g. <em>"Make it punchier with bullet points"</em>, <em>"Emphasize practical dev takeaways"</em>):</p>
+        <textarea id="reframe-feedback-${r.id}" rows="2" class="w-full bg-surface border border-glass-stroke rounded-lg p-3 text-xs font-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Enter review or restructuring feedback..."></textarea>
+        <div class="flex justify-end">
+          <button id="reframe-btn-${r.id}" onclick="submitReframe('${r.id}')" class="px-4 py-2 bg-secondary/15 hover:bg-secondary/25 text-secondary border border-secondary/30 rounded-lg text-xs font-label-caps uppercase transition-all flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">auto_fix_high</span> Reframe Post with Feedback
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Interactive Button to Toggle Editorial Rationale & Sources -->
       <div class="border-t border-glass-stroke pt-4 space-y-3">
         <button id="toggle-rationale-btn-${r.id}" onclick="toggleRationale('${r.id}')" class="w-full py-2.5 px-4 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded-lg font-label-caps text-xs text-on-surface hover:text-primary transition-colors flex items-center justify-between group">
           <span class="flex items-center gap-2">
@@ -415,7 +432,7 @@ window.openReportModal = function(id) {
         </button>
 
         <div id="rationale-section-${r.id}" class="hidden space-y-4 pt-2 transition-all">
-          <div class="bg-surface-container-lowest/80 p-4 rounded-lg border border-glass-stroke font-code-sm text-sm text-on-surface-variant leading-relaxed">
+          <div id="rationale-text-${r.id}" class="bg-surface-container-lowest/80 p-4 rounded-lg border border-glass-stroke font-code-sm text-sm text-on-surface-variant leading-relaxed">
             <strong class="text-primary block mb-1">Editorial Rationale:</strong>
             ${escapeHtml(r.summary)}
           </div>
@@ -432,12 +449,67 @@ window.openReportModal = function(id) {
   `;
 
   const footer = `
-    <button onclick="navigator.clipboard.writeText(\`${escapeHtml(r.content).replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`); showToast('Post copied to clipboard');" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-colors flex items-center gap-1.5">
+    <button onclick="copyCurrentPostText('${r.id}')" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-colors flex items-center gap-1.5">
       <span class="material-symbols-outlined text-sm">content_copy</span> Copy Post Text
     </button>
   `;
 
   createModalOverlay("report-modal", `LinkedIn Post Details — ${r.id}`, body, footer);
+};
+
+window.copyCurrentPostText = function(id) {
+  const el = document.getElementById(`post-content-${id}`);
+  const text = el ? (el.innerText || el.textContent) : "";
+  if (text) {
+    navigator.clipboard.writeText(text);
+    showToast("✓ Post copied to clipboard");
+  }
+};
+
+window.submitReframe = async function(id) {
+  const textarea = document.getElementById(`reframe-feedback-${id}`);
+  const btn = document.getElementById(`reframe-btn-${id}`);
+  const contentEl = document.getElementById(`post-content-${id}`);
+  const rationaleEl = document.getElementById(`rationale-text-${id}`);
+  const titleEl = document.getElementById(`modal-post-title-${id}`);
+
+  if (!textarea || !textarea.value.trim()) {
+    showToast("⚠️ Please enter feedback or review instructions first.");
+    return;
+  }
+
+  const feedback = textarea.value.trim();
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">sync</span> Reframing post…`;
+  }
+
+  try {
+    const result = await window.AdaAgentAPI.reframePost(id, feedback);
+    if (contentEl) contentEl.textContent = result.text;
+    if (rationaleEl) {
+      rationaleEl.innerHTML = `<strong class="text-primary block mb-1">Editorial Rationale:</strong>${escapeHtml(result.rationale || '')}`;
+    }
+    
+    // Update title if changed
+    const newTitle = result.text.split(/\n|\. /)[0].slice(0, 100) || "LinkedIn Post";
+    if (titleEl) titleEl.textContent = newTitle;
+
+    textarea.value = "";
+    showToast("✨ Post reframed & restructured according to your feedback!");
+
+    // Re-render published list on page
+    if (document.body.dataset.page === "published") {
+      renderPublishedList();
+    }
+  } catch (err) {
+    showToast(`⚠️ Reframing failed: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span class="material-symbols-outlined text-sm">auto_fix_high</span> Reframe Post with Feedback`;
+    }
+  }
 };
 
 // 2. Cycle Log Detail Modal
@@ -1056,6 +1128,7 @@ function initApiPage() {
           <option value="status">GET /api/agent/status — Read Agent Status</option>
           <option value="rejected">GET /api/agent/rejected — Read Spiked Topics Audit</option>
           <option value="activity">GET /api/agent/activity — Read Active Cycle Progress</option>
+          <option value="reframe">POST /api/agent/reframe — Reframe Post with Human Feedback</option>
         </select>
         <button id="run-api-test" class="bg-primary text-on-primary font-label-caps text-xs px-4 py-2 rounded hover:bg-primary-fixed transition-colors">Send Request</button>
       </div>
@@ -1078,6 +1151,13 @@ function initApiPage() {
         if (endpoint === "status") data = await window.AdaAgentAPI._request(`/agent/status?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
         if (endpoint === "rejected") data = await window.AdaAgentAPI._request(`/agent/rejected?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
         if (endpoint === "activity") data = await window.AdaAgentAPI._request(`/agent/activity?agentId=${encodeURIComponent(localStorage.getItem("ada_backend_agent_id") || "")}`);
+        if (endpoint === "reframe") {
+          const published = window.adaEngine ? window.adaEngine.getPublished() : [];
+          if (!published.length) {
+            throw new Error("No published posts available to reframe. Please initiate a cycle first.");
+          }
+          data = await window.AdaAgentAPI.reframePost(published[0].id, "Make the tone punchier and emphasize practical developer takeaways with clear bullet points.");
+        }
 
         resultBox.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
