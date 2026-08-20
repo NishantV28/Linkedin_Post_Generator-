@@ -68,9 +68,24 @@ def resolve_cadence(persona_min: Optional[float], persona_max: Optional[float]) 
     )
 
 
-def has_reached_post_cap(db: Session, agent_id: str) -> bool:
-    """Return whether the agent has exhausted its 48-hour publication budget."""
-    return db.query(PostModel).filter(PostModel.agent_id == agent_id).count() >= settings.MAX_POSTS_48H
+def has_reached_post_cap(db: Session, agent_id: str, window_start=None) -> bool:
+    """
+    Whether the agent has spent its 48-hour publication budget.
+
+    Counts approved posts inside the current window. This previously counted every
+    post the agent had ever written, regardless of age or whether a human approved it,
+    so a reactivated agent hit the cap on its very first tick and deactivated itself -
+    the API reported success while the agent was already dead. Drafts sitting in the
+    review queue also should not consume a budget measured in things published.
+    """
+    if window_start is None:
+        agent = db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+        if agent is None:
+            return False
+        window_start = _as_utc(agent.created_at)
+
+    approved = MemoryRepository.count_posts_in_window(db, agent_id, window_start)
+    return approved >= settings.MAX_POSTS_48H
 
 def execute_cycle_for_agent(agent_id: str) -> Optional[str]:
     """

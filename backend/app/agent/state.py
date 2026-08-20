@@ -123,3 +123,14 @@ class AgentState(TypedDict):
     mode: str
     coverage_trend: Optional[Dict[str, Any]]
     cycle_outcome: str
+    # Every candidate the editorial judge scored this cycle, so a cycle where nothing
+    # cleared the bar can still fall back to the strongest near-miss.
+    #
+    # LangGraph builds one channel per key declared here and silently discards writes
+    # addressed to anything else. Both of these were being written by the graph and the
+    # editorial judge without being declared, so the list always read back empty and
+    # the fallback was unreachable - the cycle ended "all_rejected" every time.
+    evaluated_candidates: List[Dict[str, Any]]
+    # True once such a fallback is in play. The router reads it to go straight to
+    # publishing instead of re-running the judgement that already rejected the topic.
+    forced_publish: bool

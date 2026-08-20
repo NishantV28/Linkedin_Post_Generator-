@@ -125,7 +125,15 @@ class HybridRetriever:
 
         Returns (is_dup, reason, scores).
         """
-        posts = db.query(PostModel).filter(PostModel.agent_id == agent_id).all()
+        # Drafts awaiting review count here, unlike elsewhere in this file: a topic
+        # already sitting in the review queue should not be drafted a second time
+        # while someone is still deciding on it. Only human-rejected posts are
+        # excluded, since their subject is genuinely still open.
+        posts = (
+            db.query(PostModel)
+            .filter(PostModel.agent_id == agent_id, PostModel.status != "rejected")
+            .all()
+        )
         if not posts:
             return False, "No past posts in memory", {"dense_distance": None, "lexical_overlap": 0.0}
 
@@ -197,9 +205,10 @@ class HybridRetriever:
         if len(candidates) < 2:
             return candidates
 
+        # Spacing is about what the audience last saw, so only approved posts count.
         recent = (
             db.query(PostModel)
-            .filter(PostModel.agent_id == agent_id)
+            .filter(PostModel.agent_id == agent_id, PostModel.status.in_(("approved", "posted")))
             .order_by(PostModel.created_at.desc())
             .first()
         )
@@ -238,8 +247,17 @@ class HybridRetriever:
     def get_relevant_context(agent_id: str, query_text: str, db: Session, top_k: int = 3) -> List[Dict[str, Any]]:
         """
         Retrieve topically relevant past posts for few-shot prompt context (used by writer node in Phase 3).
+
+        Approved posts only. These go verbatim into the writer's system prompt as
+        examples of the persona's voice, so an unreviewed draft - including one shaped
+        by whatever a reviewer typed into the feedback box - must not be able to steer
+        later posts before anyone has agreed it was good.
         """
-        posts = db.query(PostModel).filter(PostModel.agent_id == agent_id).all()
+        posts = (
+            db.query(PostModel)
+            .filter(PostModel.agent_id == agent_id, PostModel.status.in_(("approved", "posted")))
+            .all()
+        )
         if not posts:
             return []
 

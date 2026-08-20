@@ -80,6 +80,13 @@ def test_rearm_active_agents_logic():
         db.close()
 
 def test_hard_stop_max_posts_cap():
+    """
+    The budget counts approved posts inside the current window.
+
+    It used to count every post the agent had ever written, regardless of age or
+    review state, so a reactivated agent hit the cap on its first tick and retired
+    itself immediately.
+    """
     db = TestingSessionLocal()
 
     now = utc_now()
@@ -94,8 +101,68 @@ def test_hard_stop_max_posts_cap():
     db.add(capped_agent)
     db.commit()
 
-    db.add_all([PostModel(agent_id=capped_agent.id, text="x", rationale="x") for _ in range(settings.MAX_POSTS_48H)])
+    db.add_all([
+        PostModel(agent_id=capped_agent.id, text="x", rationale="x", status="approved")
+        for _ in range(settings.MAX_POSTS_48H)
+    ])
     db.commit()
 
     assert has_reached_post_cap(db, capped_agent.id) is True
+    db.close()
+
+
+def test_pending_drafts_do_not_consume_the_post_budget():
+    """A queue of unreviewed drafts must not silently retire the agent."""
+    db = TestingSessionLocal()
+
+    agent = AgentModel(
+        name="DraftHeavyAgent",
+        domain="AI",
+        persona_json=DISTILL_PRESET.model_dump_json(),
+        active=True,
+        created_at=utc_now(),
+        cycle_count=0
+    )
+    db.add(agent)
+    db.commit()
+
+    db.add_all([
+        PostModel(agent_id=agent.id, text="x", rationale="x", status="pending")
+        for _ in range(settings.MAX_POSTS_48H + 5)
+    ])
+    db.commit()
+
+    assert has_reached_post_cap(db, agent.id) is False
+    db.close()
+
+
+def test_posts_from_a_previous_window_do_not_count():
+    """
+    Reactivating an agent restarts its window, so posts from the earlier run fall
+    outside it. Without this an agent could never run again after a completed cycle.
+    """
+    db = TestingSessionLocal()
+
+    now = utc_now()
+    agent = AgentModel(
+        name="ReactivatedAgent",
+        domain="AI",
+        persona_json=DISTILL_PRESET.model_dump_json(),
+        active=True,
+        created_at=now,          # the window starts here
+        cycle_count=0
+    )
+    db.add(agent)
+    db.commit()
+
+    db.add_all([
+        PostModel(
+            agent_id=agent.id, text="x", rationale="x", status="approved",
+            created_at=now - timedelta(days=5),   # from the agent's previous run
+        )
+        for _ in range(settings.MAX_POSTS_48H)
+    ])
+    db.commit()
+
+    assert has_reached_post_cap(db, agent.id) is False
     db.close()

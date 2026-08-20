@@ -1,201 +1,342 @@
 # Autonomous AI Persona Agent
 
-An autonomous publishing system that finds AI research and engineering stories, applies a persona-specific editorial bar, writes an original LinkedIn post, quality-checks it, and persists both published and rejected decisions. The system is intentionally selective: a cycle may publish nothing.
+An agent that finds AI research and engineering stories, judges them against a persona's editorial bar, writes a LinkedIn post, quality-checks it, and records both what it published and what it turned down.
 
-> Distill is an AI research translator that publishes only when it has found the real story inside a paper—not just its highest number.
+The system is deliberately selective. A cycle can end without publishing anything, and every rejection is logged with the scores behind it.
 
-## System at a glance
+---
 
-The React dashboard initializes an agent and reads its audit trail. FastAPI owns the durable agent record and starts one background scheduler task per active agent. Each scheduled cycle discovers possible topics, filters and de-duplicates them using deterministic logic and long-term memory, then runs the LangGraph editorial workflow. LLM calls are confined to the editorial judge, writer/reflection-writer, and QA nodes.
+## Contents
 
-For a single end-to-end diagram from dashboard initialization through scheduling, publishing, persistence, and polling, see [ARCHITECTURE_FLOW.md](ARCHITECTURE_FLOW.md).
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [Run it locally](#run-it-locally)
+- [Environment variables](#environment-variables)
+- [API](#api)
+- [Deploying to Render](#deploying-to-render)
+- [Project status](#project-status) — **what works, what's broken, what's left**
+- [Known problems](#known-problems)
+- [What to build next](#what-to-build-next)
+- [Repository layout](#repository-layout)
+
+---
+
+## What it does
+
+One **cycle** runs like this:
+
+1. **Discover** — pulls candidate stories from Hacker News, arXiv, GitHub Search, and web search (Tavily if configured, DuckDuckGo otherwise). One source failing doesn't stop the others.
+2. **Triage** — deterministic filters remove stale, thin, low-credibility, previously-rejected and duplicate candidates, then reorder what's left so subjects close to the last post come later. No LLM calls here.
+3. **Judge** — the editorial judge scores one candidate at a time against the persona's thresholds. Rejections are recorded with their scores.
+4. **Write** — the writer drafts a post in the persona's voice, ending with 3–5 topic hashtags.
+5. **QA** — deterministic rules (forbidden phrases, sentence length, word count, no em-dashes, no closing takeaway) plus model checks for grounding, repetition and single-idea focus. Failing sends the draft back for revision, up to 3 times.
+6. **Save as a draft** — a passing post is written to SQLite with status `pending` and embedded into ChromaDB, so future cycles can tell the topic is already in hand.
+7. **Review** — you approve or reject it in the dashboard. **Nothing is published on the model's judgement alone**, since posts go out under a real person's name.
+
+If the agent notices a pattern in its own recent coverage, it can instead write a **reflection** post about that, rather than a new source.
+
+At any point you can give **feedback** on a post ("make it punchier", "emphasise the practical takeaway") and the reframer rewrites it. **Every version is kept** — open *View All Drafts* to see each draft, the feedback that produced it, and restore any earlier one.
+
+Approval is what makes a post real, and it decides more than visibility:
+
+| | Pending | Approved | Rejected |
+|---|---|---|---|
+| Counts toward `MAX_POSTS_48H` | no | **yes** | no |
+| Used as a voice example for future posts | no | **yes** | no |
+| Checked against for repetition | no | **yes** | no |
+| Blocks the topic from being drafted again | **yes** | **yes** | no |
+
+So an unreviewed draft — including one shaped by whatever someone typed into the feedback box — cannot influence what the agent writes next until a human has agreed it was any good. Rejecting a post keeps it on record but releases its topic for a future cycle.
+
+**Personas** are presets (`Distill`, `Ada`) defining domain, voice, forbidden phrases, word bounds, judge thresholds and posting cadence. The persona chosen at setup is frozen with the agent.
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    UI["Static dashboard\n(HTML/Tailwind/JS)"] -->|"POST /init"| API["FastAPI API"]
-    UI -->|"syncs feed, status, rejected\non load + on action"| API
-    API --> DB[("SQLite\nagents, posts, rejections, cycles")]
+    UI["Ada Desk dashboard<br/>(static HTML/JS)"] -->|"POST /init"| API["FastAPI"]
+    UI -->|"feed · status · rejected · revisions"| API
+    API --> DB[("SQLite<br/>agents · posts · revisions<br/>rejections · cycles")]
     API --> S["Per-agent asyncio scheduler"]
-    S --> D["Discovery\nHN · arXiv · GitHub · web search"]
-    D --> F["Deterministic triage\nprefilter · rejected-URL skip · dedup · spacing"]
+    S --> D["Discovery<br/>HN · arXiv · GitHub · web"]
+    D --> F["Deterministic triage<br/>prefilter · dedup · spacing"]
     F --> G["LangGraph editorial workflow"]
-    G -->|"publish"| M["Memory repository"]
+    G -->|publish| M["Memory repository"]
     M --> DB
     M --> E["SentenceTransformer embeddings"]
-    E --> C[("ChromaDB\nper-agent vectors")]
+    E --> C[("ChromaDB<br/>per-agent vectors")]
     C --> F
-    C --> G
-    G <-->|"structured LLM calls"| L["Groq (preferred)\nor OpenAI"]
+    G <-->|structured calls| L["Groq (preferred)<br/>or OpenAI"]
 ```
 
-## Complete lifecycle
+**One service, one port.** FastAPI serves both the API (`/api/...`) and the dashboard (`/`) from the same process — the Dockerfile copies `frontend1/ada-desk` into the image and `main.py` mounts it as static files. There is no separate frontend server in the deployed setup.
 
-1. **Application startup** initializes SQLite, performs a small structured-output LLM health check, exposes it through `GET /health`, and re-arms a scheduler task for every active agent found in SQLite.
-2. **Agent initialization**: the dashboard submits a persona name and domain to `POST /api/agent/init`. The API uses a matching persona preset (with an optional bio override), saves the immutable persona JSON, chooses a jittered first run, and starts the scheduler. Repeating the same active name/domain is idempotent and returns the existing agent.
-3. **Scheduler** waits until the next run, enforces the 48-hour lifespan and post cap, executes a cycle in a worker thread, records the next scheduled time, and repeats. An unexpected scheduler error waits five minutes before retrying.
-4. **Discovery and deterministic selection** combine candidates from Hacker News, arXiv, GitHub Search, and web search (Tavily when configured, DuckDuckGo otherwise). A source failure does not stop other sources.
-5. **Memory-aware triage** removes stale, thin, low-credibility, already-rejected, and duplicate candidates; then it orders close-to-the-last-post subjects later to improve feed variety. No LLM call is used here.
-6. **Editorial graph** evaluates candidates one at a time. It records every editorial or QA rejection and advances to the next candidate until one post is published or candidates are exhausted. A detected coverage trend can instead trigger a reflection post about the agent’s own recent work.
-7. **Persistence and display** saves a passing post to SQLite and ChromaDB. The dashboard polls read-only endpoints to show posts, next run, cycle count, and rejected-topic reasons.
+**Scheduling** is one `asyncio` task per active agent, sleeping between cycles and executing each cycle in a worker thread. Cycles are bounded by a 48-hour window and a post cap.
 
-## Cycle state graph
+---
 
-`AgentState` carries the persona, candidate list and pointer, current candidate, judge/draft/QA outputs, revision count, error state, publication result, rejection audit items, and optional reflection trend through the compiled LangGraph workflow.
+## Run it locally
 
-```mermaid
-stateDiagram-v2
-    [*] --> StartCycle
-    StartCycle --> ReflectionWriter: reflection mode + trend
-    StartCycle --> EditorialJudge: topic mode + candidate
-    StartCycle --> [*]: no candidate and no trend
-
-    EditorialJudge --> Abort: infrastructure / LLM error
-    EditorialJudge --> Writer: editorial pass
-    EditorialJudge --> LogRejection: editorial reject
-
-    Writer --> Abort: infrastructure / LLM error
-    Writer --> QAJudge
-    ReflectionWriter --> Abort: infrastructure / LLM error
-    ReflectionWriter --> QAJudge
-
-    QAJudge --> Abort: infrastructure / LLM error
-    QAJudge --> Publish: QA pass
-    QAJudge --> Writer: revise and revisions < 2
-    QAJudge --> ReflectionWriter: reflection revise and revisions < 2
-    QAJudge --> LogRejection: topic QA failed or revision limit reached
-    QAJudge --> Abort: reflection failed or revision limit reached
-
-    LogRejection --> AdvanceCandidate
-    AdvanceCandidate --> EditorialJudge: next candidate exists
-    AdvanceCandidate --> [*]: candidates exhausted
-    Publish --> [*]
-    Abort --> [*]
-```
-
-### Topic-cycle routing
-
-```mermaid
-flowchart TD
-    A["Discover candidates"] --> B["Prefilter\nmax 10 candidates/cycle"]
-    B --> C["Skip previously rejected URLs"]
-    C --> D["Hybrid deduplication\nembeddings + IDF lexical overlap"]
-    D --> E["Topic spacing against latest post"]
-    E --> F{"Coverage trend?"}
-    F -->|"yes"| R["Reflection writer"]
-    F -->|"no"| G{"Candidate available?"}
-    G -->|"no"| N["Outcome: no_novel_candidates"]
-    G -->|"yes"| H["Editorial judge"]
-    H --> I{"Pass and thresholds met?"}
-    I -->|"no"| J["Log rejection"]
-    J --> K{"Another candidate?"}
-    K -->|"yes"| H
-    K -->|"no"| L["Outcome: all_rejected"]
-    I -->|"yes"| W["Writer"]
-    W --> Q["QA judge"]
-    R --> Q
-    Q --> P{"QA pass?"}
-    P -->|"yes"| Z["Save post + vector\nOutcome: published"]
-    P -->|"topic revise, < 2 revisions"| W
-    P -->|"reflection revise, < 2 revisions"| R
-    P -->|"topic failed"| J
-    P -->|"reflection failed"| X["Abort cycle"]
-```
-
-## LLM call architecture
-
-All model calls use LangChain `ChatOpenAI` with Pydantic structured output. The provider is selected at runtime: a valid `GROQ_API_KEY` takes precedence; otherwise `OPENAI_API_KEY` is used. Defaults are `llama-3.3-70b-versatile` for Groq and `gpt-4o-mini` for OpenAI, unless `LLM_MODEL` overrides them. Models without native JSON-schema support use function calling. Each structured call retries up to three times for transient malformed structured responses.
-
-| Stage | Invocation | Input context | Structured result | Deterministic guard / route |
-| --- | --- | --- | --- | --- |
-| Startup health | 1 small call | `ping` | `LLMCheck { ok }` | Sets `/health` `canPublish`; startup continues but cycles will fail closed if unavailable. |
-| Editorial judge | 1 per evaluated topic | Persona, thresholds, candidate metadata, 8 recent titles | `JudgeVerdict` scores + decision + reason | Code overrides a model `pass` if any persona threshold is missed. |
-| Writer | 1 initial draft + up to 2 revisions | Persona voice, approved source, judge rationale, QA feedback on revision, up to 2 hybrid-retrieved prior posts | `DraftPost` text + selection / timing rationale | Separates a required closing line deterministically. |
-| Reflection writer | 1 initial draft + up to 2 revisions | Persona voice, deterministically detected related post titles, QA feedback | `DraftPost` | Used only in reflection mode; no candidate discovery source is invented. |
-| QA judge | 1 per draft attempt | Draft, source summary (or prior titles for a reflection), 4 recent full posts, voice rules | `QAVerdict` voice / grounding / repetition flags + pass/revise feedback | Code forces `revise` for forbidden phrases, lifted example wording, or missing required closing line. |
-
-A normal topic candidate therefore uses **1–7 logical LLM calls**: judge + one to three writer calls + one to three QA calls. A reflection uses **2–6 logical calls** (writer and QA only). Retry attempts can increase provider requests up to threefold. Discovery, prefiltering, deduplication, trend detection, rejection logging, and publishing are deterministic/local operations.
-
-### Failure semantics
-
-- An LLM, rate-limit, or infrastructure failure sets `node_error` and routes to `abort_cycle`; it is never written as an editorial rejection.
-- QA fails closed: an unavailable QA response cannot publish a draft.
-- A topic that still fails QA after two revisions is logged as a QA rejection and the graph tries the next candidate.
-- A reflection that still fails QA after two revisions is abandoned because it has no next topic candidate.
-- Discovery-source failures are isolated; the cycle can proceed with candidates from the remaining sources.
-- Every cycle writes a `cycle_runs` audit record with outcome and raw candidate count, including failures.
-
-## Memory and data model
-
-SQLite is the source of record, while ChromaDB stores semantic vectors for published posts. Both are partitioned by agent ID.
-
-| Store | Records | Used for |
-| --- | --- | --- |
-| SQLite `agents` | Persona JSON, schedule, active flag, cycle count | Scheduler recovery and API status. |
-| SQLite `posts` | Published text, rationale, sources, topic title, kind | Feed, audit, recent-post context, reflection pacing. |
-| SQLite `rejected_topics` | Topic, URL, reason, score payload | Rejection audit and skipping repeat re-evaluation. |
-| SQLite `cycle_runs` | Timing, outcome, discovered count | Operational history. |
-| ChromaDB `agent_<id>` | `all-MiniLM-L6-v2` post embeddings | Dense duplicate detection and writer few-shot retrieval. |
-| In-process BM25 | Tokenized SQLite posts | Sparse counterpart to dense retrieval; fused with reciprocal-rank fusion. |
-
-The hybrid duplicate check accepts an exact semantic match on its own, but requires both semantic similarity and high IDF-weighted lexical overlap for borderline matches. This avoids treating every post from the same subfield as a duplicate. Reflection detection is also deterministic: after enough history, it finds a sufficiently large related group among recent post embeddings and spaces reflection posts apart.
-
-## API and frontend contract
-
-| Endpoint | Purpose | LLM calls |
-| --- | --- | --- |
-| `POST /api/agent/init` | Create or resume an active persona agent and launch/reuse its scheduler | None during request; later cycles call the model. |
-| `GET /api/agent/feed?agentId=…` | Return newest-first published posts | None. |
-| `GET /api/agent/status?agentId=…` | Return agent lifecycle and next scheduled time | None. |
-| `GET /api/agent/rejected?agentId=…` | Return rejection audit log | None. |
-| `GET /health` | Return service and structured-output LLM readiness | None during request. |
-
-The static dashboard (`frontend1/ada-desk`) stores the backend agent ID in `localStorage` (`ada_backend_agent_id`), via `assets/js/agent-api.js`. It syncs feed, status, and rejected topics once on page load, and again after any action that changes state — initiating a cycle, or the manual refresh/fetch buttons on each page. A missing agent (usually after a database reset) surfaces as a failed sync and returns the user to initialization.
-
-## Project structure
-
-- `backend/app/api/`: FastAPI routes and request/response schemas.
-- `backend/app/core/`: settings and the persistent per-agent scheduler.
-- `backend/app/agent/`: LangGraph state machine, LLM factory, prompts, persona rules, nodes, and discovery tools.
-- `backend/app/memory/`: SQLAlchemy models, SQLite repository, embeddings, ChromaDB, hybrid retrieval, and reflection detection.
-- `frontend1/ada-desk/`: active monitoring dashboard — static HTML/Tailwind/vanilla JS, served by a small Node.js server (`server.js`). Backend integration lives in `assets/js/agent-api.js`. (An earlier `frontend/` Vite + React prototype exists in the repo as a legacy reference and is not used.)
-- `backend/tests/`: API, graph, and scheduling contract tests.
-- `walkthrough.md`: live-data/API-key, scheduling, restart, and verification guide.
-- `persona-distill.md`: persona identity, voice, editorial standards, and memory behavior.
-
-## Quick start
-
-### 1. Configure and install
+**Requires:** Python 3.11 (3.13 also works, but 3.11 matches the Docker image and has the most reliable prebuilt wheels for torch/chromadb).
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-py -m pip install -r requirements.txt
+# 1. Create a virtual environment. Keep it OUTSIDE any OneDrive-synced folder —
+#    syncing thousands of package files makes installs crawl and can lock files.
+python -m venv C:\venvs\lpg
+C:\venvs\lpg\Scripts\Activate.ps1
+
+# 2. Install (downloads torch and friends — several GB, takes a while)
+python -m pip install -r requirements.txt
+
+# 3. Configure
 Copy-Item .env.example .env
+notepad .env     # put your real GROQ_API_KEY in — see below
 ```
-
-Set either `GROQ_API_KEY` or `OPENAI_API_KEY` in `.env`. `TAVILY_API_KEY` is optional; without it web discovery uses DuckDuckGo. The first embedding use loads `sentence-transformers/all-MiniLM-L6-v2`.
-
-### 2. Start the API
 
 ```powershell
-py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+# 4. Run — FRONTEND_DIR makes FastAPI serve the dashboard too
+$env:FRONTEND_DIR = "frontend1\ada-desk"
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Check `http://127.0.0.1:8000/health`; `canPublish` should be `true` before expecting published posts.
+Open **http://127.0.0.1:8000/** for the dashboard and **http://127.0.0.1:8000/health** to check status — `canPublish` must be `true` before the agent can publish anything.
 
-### 3. Start the dashboard
+On macOS/Linux the equivalents are `python3 -m venv .venv`, `source .venv/bin/activate`, and `export FRONTEND_DIR=frontend1/ada-desk`.
+
+**Tests:**
 
 ```powershell
-cd frontend1\ada-desk
-npm start
+python -m pytest backend/tests -v
 ```
 
-Open `http://localhost:5173`. It calls the backend at `http://127.0.0.1:8000/api` by default; the FastAPI server must be running on port 8000 (8000 is reserved for the backend, 5173 for the dashboard). To point it at a different backend or set an API key, edit `baseUrl`/`apiKey` in `assets/js/agent-api.js`. No build step is required — it's static HTML/CSS/JS; you can also open `index.html` directly or serve the folder with any static file server.
+### Notes
 
-### 4. Run tests
+- `--reload` watches `.py` files only. **Changing `.env` requires a full restart.**
+- If `Activate.ps1` is blocked, run `Set-ExecutionPolicy -Scope Process -Bypass` first.
+- The dashboard talks to a relative `/api` path, so it works wherever it's served from. Running it separately on another port (via `frontend1/ada-desk/server.js`) also works — that server proxies `/api` and `/health` to port 8000.
 
-```powershell
-py -m pytest backend/tests -v
+---
+
+## Environment variables
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `GROQ_API_KEY` | **Yes** (or OpenAI) | — | Preferred. Get one at console.groq.com/keys. |
+| `OPENAI_API_KEY` | Only if no Groq key | — | Fallback provider. |
+| `TAVILY_API_KEY` | No | — | Without it, web discovery uses DuckDuckGo. |
+| `LLM_MODEL` | No | `openai/gpt-oss-120b` | Must support structured output. This is a *Groq-hosted* model despite the name. |
+| `LLM_FALLBACK_MODELS` | No | `llama-3.3-70b-versatile,openai/gpt-oss-20b` | Tried in order when the primary is rate limited. Empty disables fallback. |
+| `LLM_TIMEOUT_SECONDS` | No | `90` | Per request. |
+| `LLM_CALL_DELAY_SECONDS` | No | `1.0` | Pause before every model call, to avoid tripping per-minute limits. |
+| `DATABASE_URL` | No | `sqlite:///./post_generator.db` | See the ephemeral-storage warning below. |
+| `FRONTEND_DIR` | No | `/app/frontend` | Where the dashboard's static files live. Set it locally to `frontend1/ada-desk`. |
+| `ENVIRONMENT` | No | `development` | Set to `production` when deployed. |
+| `LOG_LEVEL` | No | `INFO` | |
+| `CADENCE_MIN_HOURS` / `CADENCE_MAX_HOURS` | No | `2.0` / `5.0` | Used only when the persona defines no cadence. |
+| `CADENCE_OVERRIDE_MIN_HOURS` / `..._MAX_HOURS` | No | unset | Demo override — makes a full loop observable in minutes. |
+| `MAX_POSTS_48H` | No | `16` | Safety cap. |
+| `HOST` / `PORT` | No | `0.0.0.0` / `8000` | The Dockerfile hardcodes these; setting them has no effect on Render. |
+
+**Placeholders count as missing.** `GROQ_API_KEY=your_groq_api_key_here` is explicitly rejected, and the startup check reports "No LLM API key provided" rather than an auth error.
+
+---
+
+## API
+
+Base path `/api/agent`. **No authentication** — see [Known problems](#known-problems).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/init` | Create or reactivate an agent from `{persona: {name, domain, bio?}}`. Starts its scheduler. |
+| `GET` | `/feed?agentId=&postStatus=` | Posts, newest first. `postStatus` filters by review state (`pending`, `approved`, `rejected`, `posted`; comma-separated). Also returns `pendingCount`. |
+| `GET` | `/status?agentId=` | Agent state, next run, cycle count. Omitting `agentId` returns **all** agents. |
+| `GET` | `/activity?agentId=` | Live progress of the currently executing cycle. |
+| `GET` | `/rejected?agentId=` | Rejected topics with reasons and judge scores. Omitting `agentId` returns **all** agents'. |
+| `POST` | `/reframe` | Rewrite a post from human feedback: `{postId, feedback}`. Keeps the old version. |
+| `GET` | `/post/{postId}/revisions` | Every saved version, oldest first, with the feedback behind each. |
+| `POST` | `/post/{postId}/restore` | Make an earlier version current: `{version}`. Appends a new version rather than deleting. |
+| `POST` | `/post/{postId}/approve` | Accept a draft — this is what publishes it. Optional `{note}`. |
+| `POST` | `/post/{postId}/reject` | Turn a draft down. Kept on record, excluded from memory. Optional `{note}`. |
+
+Also: `GET /health` (service + LLM status), `GET /docs` (interactive API docs), `GET /` (the dashboard).
+
+---
+
+## Deploying to Render
+
+Deploys as a **single Docker web service** — no separate frontend service needed.
+
+1. New → Web Service → connect this repo → Runtime **Docker**
+2. Add environment variables: `GROQ_API_KEY`, `TAVILY_API_KEY`, `ENVIRONMENT=production`. Leave the rest on defaults.
+3. Deploy. Don't set `PORT` — the Dockerfile hardcodes 8000 and Render detects it from `EXPOSE`.
+4. Check `/health` → `canPublish: true`.
+
+**Free tier realities, all of which are real and currently unaddressed:**
+
+- **512MB RAM.** The Dockerfile installs the CPU-only torch wheel and caps thread pools specifically to fit. It's still tight — expect occasional OOM restarts.
+- **Ephemeral disk.** SQLite and ChromaDB both write to container-local paths, so **every deploy or restart wipes all posts and history.** Attach a persistent disk and point `DATABASE_URL` at it for anything you want to keep.
+- **The service sleeps** after ~15 minutes idle. Since cycles are driven by in-process timers, the agent effectively only runs when a request wakes the container. It is not meaningfully autonomous on this tier.
+- **Slow builds** (torch is most of it), and a build log warning about `pip` running as root, which is normal in Docker and safe to ignore.
+
+---
+
+## Project status
+
+### Working
+
+Discovery · deterministic triage and dedup · the LangGraph editorial pipeline · persona presets · SQLite + ChromaDB persistence · the dashboard · **human approval before anything publishes** · reframing from human feedback · draft history with restore · CI running the test suite on every push · single-service Docker deploy.
+
+### Not built yet
+
+| Gap | Consequence |
+|---|---|
+| **Nothing reaches LinkedIn** | Approving a post marks it approved in the database; it is not sent anywhere. The loop is not closed. |
+| **No engagement feedback** | The agent never learns whether anything worked. Its judgement is frozen at whatever the prompts encode. |
+| **No agent lifecycle** | No delete, pause, resume or reset. Agents accumulate permanently. |
+| **No cost tracking** | ~10 LLM calls per cycle, none recorded. |
+| **Unused data** | `cycle_runs` and `rejected_topics.judge_scores_json` have been collecting since day one and are displayed nowhere. |
+
+---
+
+## Known problems
+
+Ordered by severity. These are real, reproducible, and unfixed at time of writing.
+
+### Recently fixed
+
+Three critical bugs were resolved and are covered by tests:
+
+- **`AgentState` was missing `evaluated_candidates` and `forced_publish`.** LangGraph discards writes to undeclared channels, so the "publish the best near-miss rather than nothing" fallback could never fire. `backend/tests/test_graph_e2e.py` now asserts the schema directly and drives the fallback end to end.
+- **The startup LLM check blocked before the port was bound.** It now runs off the event loop with a 20-second cap, so a slow provider produces a service that starts and reports the fault on `/health` rather than a deploy that appears to hang.
+- **`_build_structured` called `get_llm()`**, which can return a fallback wrapper exposing neither `.model_name` nor `.with_structured_output`. It uses the raw client directly now, which also stops fallbacks being nested two deep.
+
+### Correctness
+
+- **Concurrent cycles.** `trigger_agent_now` cancels the coroutine but not the worker thread running the cycle, then starts a new one — double-clicking "Initiate Cycle" runs two cycles on one agent.
+- **`save_post` commits before writing the vector.** A ChromaDB failure leaves a published post with no embedding, which dedup can never match, so the topic gets republished.
+- **The cycle's `finally` block** reports inactive cycles as failures, and reuses a session that may need a rollback — losing the audit row for exactly the failures you want to see.
+- **Force-published posts bypass QA** and stay in the Rejected list, so the same title appears on both pages.
+- **The dedup fallback republishes known duplicates** when triage drops everything.
+- **Unguarded lazy singletons** for the embedding model and Chroma client — two concurrent first-cycles can load two copies of the model, which on 512MB is fatal.
+- **Reframing still bypasses QA.** Feedback like "make it longer, add a takeaway" produces text the QA judge would have hard-rejected — though it now lands in a draft a human must approve, rather than going straight out.
+- **Hashtags count toward the word limit.** The writer targets 180 words, appends hashtags, exceeds 180, and QA forces a revision — burning revisions on an artefact. Reflection posts never got the hashtag instruction at all, so they publish without any.
+
+### Security
+
+- **No authentication anywhere**, and CORS is `*` with credentials. `POST /init` spawns a permanent background loop, so anyone can create unlimited agents with no way to delete them.
+- **`/reframe` is unauthenticated and uncapped.** Each call costs an LLM invocation on the same quota the agent uses; `feedback` has no length limit and no ownership check.
+- **Prompt injection is contained but not prevented.** Feedback text still goes into the post, but only *approved* posts feed the writer's few-shot context and the QA repetition corpus, so injected content cannot influence future posts unless a human approves it first.
+- **Raw provider errors** (model name, endpoint, quota) are returned to anonymous callers and rendered via `innerHTML`.
+- **Unbounded reads.** `/feed`, `/rejected` and `/status` have no limits, and the latter two return every agent's data when `agentId` is omitted.
+
+### Dashboard
+
+- Returning visitors who loaded the dashboard before the API URL changed are permanently pinned to `localhost` by cached `localStorage`, and see stale demo metrics as if live.
+- The live feed never renders — `main.js` calls a `getFeedLines()` method that doesn't exist.
+- Rejected Topics shows other agents' rejections under the current persona's name.
+- "Copy Post Text" copies HTML entities (`&quot;`, `&amp;`) instead of clean text.
+- Nothing polls, so results never appear until a manual reload.
+- Several controls (`#spike-filter`, `#load-previous`, the "Execution Mode" toggle) have no handlers at all. (The Published page's filter now works — it filters by review status.)
+- `agent-engine.js` still contains client-side simulation code writing fake cycles into the same `localStorage` the real sync uses.
+- The API playground's reframe demo permanently rewrites your newest real post.
+
+### Deployment
+
+- All data on ephemeral disk (above). If only the Chroma directory is lost, dedup silently degrades to "nothing is a duplicate".
+- The embedding model downloads at runtime on every cold start; `HF_HOME` isn't set.
+- Shutdown never drains the executor, so SIGTERM can land mid-write.
+- Dependencies are unpinned `>=` ranges with no lockfile — `chromadb` and `langgraph` have both shipped breaking majors above these floors.
+
+---
+
+## What to build next
+
+Roughly in the order that gives the most value.
+
+### 1. Fix what's left
+
+The three critical bugs are fixed and CI now runs the suite on every push. The next tier is the correctness list above — the per-agent cycle lock, embedding before commit, the rollback in the cycle's `finally` — then **auth**, which should land before this URL is shared with anyone.
+
+### 2. Finish the review flow
+
+Approval exists; three things would make it good:
+
+- **Run QA on reframed text.** Reframing still skips the deterministic checks. Now that reframes land in a draft rather than over a published post the blast radius is small, but a post can still be approved with em-dashes and a closing takeaway the QA judge would have rejected.
+- **Feedback presets** — *Shorter · Punchier · More technical · Add an example* — instead of a free-text box. Faster to use, and it closes most of the prompt-injection surface as a side effect.
+- **Notify when something needs review.** A queue nobody is told about is just a queue. Email, Slack or a webhook on `pending`.
+
+### 3. Make the output better
+
+- **Voice samples in the persona preset.** LLMs match style from examples, not adjectives. Better still, let a user paste three of their own posts and derive the voice from those.
+- **Generate 2–3 drafts with different angles, keep the best.** Revision loops converge on "less wrong"; parallel drafts find "better".
+- **A golden-set eval harness** — freeze ~20 real candidates, diff the judge's decisions before and after a prompt change. This would have caught the hashtag/word-count regression immediately.
+- **Post-type variety** and **per-persona discovery sources**, so the persona system works beyond AI research.
+- **A brand-safety check.** QA judges style, not reputational risk. Unhedged claims about named companies are a different problem from em-dashes.
+
+### 4. Make it actually autonomous
+
+The agent currently isn't, in any meaningful sense — the free instance sleeps, and in-process timers die with it.
+
+- **Move scheduling out of the process.** An external cron or uptime pinger hitting a trigger endpoint is the cheap fix; a real job queue (Celery/RQ + Redis) is the durable one, and also survives restarts and scales past one process.
+- **Measure the 48-hour window in cycles elapsed**, not wall-clock, so a sleeping instance doesn't burn its budget doing nothing.
+- **Notify on publish** (email, Slack, webhook). An agent that publishes every 2–3 hours into a dashboard nobody watches may as well not have.
+- **Per-stage cycle progress**, so a running cycle isn't a black box.
+- **Confidence-gated auto-publish** once approval exists — auto-publish above a threshold, queue the rest, and dial autonomy up as trust builds instead of choosing all-or-nothing.
+
+### 5. Close the loop
+
+- **Post to LinkedIn** (`w_member_social` + `POST /ugcPosts`). Needs app review, which takes weeks — **start that application early even though this ships late.** A copy-to-clipboard button covers the gap.
+- **Pull engagement data** and feed it into the judge and writer prompts. This is what finally makes the memory system earn its keep; today ChromaDB only does deduplication.
+- **Learn from approve/reject/edit decisions** — the signal that makes the agent feel like *yours* after a week rather than a generic writer.
+- **Link strategy** (LinkedIn suppresses posts with body links; the convention is the link in the first comment) and **a generated visual**, which measurably increases reach.
+
+### 6. Surface what you already collect
+
+`cycle_runs` and `rejected_topics.judge_scores_json` answer the most important tuning question in the system — *is the editorial bar too strict?* — and nothing displays them. A performance page showing publish rate, outcome mix over time, and score distributions for accepted vs rejected is cheap and immediately useful.
+
+### 7. Harden the deployment
+
+Replace `sentence-transformers`/`torch` with **`fastembed`** (ONNX, ~50MB, same model) — that alone takes the free tier from borderline to comfortable and cuts build time. Then a **persistent disk**, a **`render.yaml`** blueprint, **structured logging + Sentry**, and **pinned dependencies**.
+
+---
+
+## Repository layout
+
+```
+backend/app/
+  main.py              FastAPI app, lifespan, static mount for the dashboard
+  api/routes.py        All HTTP endpoints
+  core/
+    config.py          Settings (pydantic-settings, reads .env)
+    scheduler.py       Per-agent asyncio loops, cycle execution
+  agent/
+    graph.py           LangGraph wiring and routing
+    state.py           AgentState — the cycle's shared state
+    llm.py             Model construction, structured output, retries, fallbacks
+    reframer.py        Rewrites a post from human feedback
+    nodes/             editorial_judge · writer · reflection_writer · qa_judge · publish · rejection_logger
+    prompts/           System prompts per node
+    persona/           Presets, schema, deterministic voice rules
+    tools/             hn · arxiv · github_trending · web_search · prefilter · discovery
+  memory/
+    models.py          SQLAlchemy models incl. PostRevisionModel + post status
+    db.py              Engine, init, lightweight migrations
+    repository.py      Reads/writes across SQLite + ChromaDB
+    embeddings.py      SentenceTransformer singleton
+    vector_store.py    ChromaDB client
+    hybrid_retriever.py  Dense + BM25 dedup and spacing
+  tests/               Node-level tests (phase1–4) + test_graph_e2e.py (whole-cycle)
+
+frontend1/ada-desk/    Static dashboard — index · published · spiked · cycle-log · api
+scripts/               Manual test scripts for cycles, discovery, scheduling
+.github/workflows/     CI - runs pytest on every push and pull request
+Dockerfile             Single-service image (API + dashboard)
 ```
 
-For detailed live-data setup, cadence overrides, restarts, and verification, see [walkthrough.md](walkthrough.md).
+---
+
+## License
+
+MIT

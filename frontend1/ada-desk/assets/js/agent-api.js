@@ -92,6 +92,8 @@ const AdaAgentAPI = {
       ? rejectedAgent 
       : rejectedAll;
 
+    // `status` here is the review state from the backend - pending until a human
+    // approves it - not a fixed "published" label as before.
     const published = (feed.posts || []).map(post => ({
       id: post.id,
       title: post.text.split(/\n|\. /)[0].slice(0, 100) || "LinkedIn Post",
@@ -99,13 +101,16 @@ const AdaAgentAPI = {
       type: "analysis",
       timestamp: post.createdAt,
       confidence: 100,
-      status: "published",
+      status: post.status || "approved",
+      reviewedAt: post.reviewedAt || null,
       author: agent.name,
       summary: post.rationale || post.text,
       content: post.text,
       vectors: post.sources || [],
       logs: []
     }));
+
+    const pendingCount = feed.pendingCount || 0;
 
     const spiked = (rejected.rejectedTopics || []).map(item => ({
       id: item.id,
@@ -201,7 +206,11 @@ const AdaAgentAPI = {
       spiked,
       cycles: cycleList,
       metrics: {
-        articles24h: published.length,
+        // Only approved posts are "drafted articles" from the audience's point of
+        // view; drafts awaiting review are counted separately so the queue can be
+        // badged without conflating the two.
+        articles24h: published.filter(p => p.status === "approved" || p.status === "posted").length,
+        pendingCount,
         spikedCount: spiked.length,
         cycleCount: agent.cycleCount,
         nextRunAt: agent.nextRunAt,
@@ -243,6 +252,23 @@ const AdaAgentAPI = {
   async fetchRevisions(postId) {
     if (!postId) throw new Error("Post ID is required.");
     return this._request(`/agent/post/${encodeURIComponent(postId)}/revisions`);
+  },
+
+  async reviewPost(postId, decision, note) {
+    if (!postId) throw new Error("Post ID is required.");
+    if (decision !== "approve" && decision !== "reject") {
+      throw new Error(`Unknown review decision '${decision}'.`);
+    }
+    const result = await this._request(`/agent/post/${encodeURIComponent(postId)}/${decision}`, {
+      method: "POST",
+      body: JSON.stringify({ note: note || null })
+    });
+    try {
+      await this.sync();
+    } catch (err) {
+      console.warn("Review saved but the dashboard sync failed:", err);
+    }
+    return result;
   },
 
   async restoreRevision(postId, version) {

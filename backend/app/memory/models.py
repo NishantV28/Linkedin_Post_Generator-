@@ -48,6 +48,19 @@ class PostModel(Base):
     # "topic" for an ordinary post, "reflection" for one about the agent's own
     # recent coverage. Used to pace reflections rather than emit them back to back.
     kind = Column(String(32), nullable=False, default="topic", server_default="topic")
+    # Where this post sits in the review flow:
+    #   pending  - written and QA'd, waiting for a human decision
+    #   approved - a human accepted it; only these count toward the post budget,
+    #              feed the writer's few-shot context, or seed deduplication
+    #   rejected - a human turned it down; kept for the record, excluded from memory
+    #   posted   - approved and published to LinkedIn (reserved; not yet wired up)
+    #
+    # The agent writes under a real person's name, so nothing should reach an audience
+    # on the model's say-so alone. Keeping unapproved drafts out of memory also means a
+    # draft shaped by human feedback cannot influence later posts before anyone has
+    # agreed it was any good.
+    status = Column(String(16), nullable=False, default="pending", server_default="approved", index=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
 
     agent = relationship("AgentModel", back_populates="posts")
     revisions = relationship(

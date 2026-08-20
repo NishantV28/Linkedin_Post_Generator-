@@ -398,9 +398,28 @@ window.openReportModal = function(id) {
           <span class="font-label-caps text-xs text-primary uppercase font-bold tracking-wider flex items-center gap-1.5">
             <span class="material-symbols-outlined text-sm">post_add</span> Generated LinkedIn Post
           </span>
+          <span id="post-status-badge-${r.id}">${statusBadge(r.status)}</span>
         </div>
         <div id="post-content-${r.id}" class="bg-surface-container-lowest p-5 rounded-xl border border-glass-stroke prose prose-invert max-w-none text-body-md whitespace-pre-wrap font-sans text-on-surface leading-relaxed select-text">
           ${escapeHtml(r.content)}
+        </div>
+      </div>
+
+      <!-- 1b. Review decision. A draft is not public until someone approves it. -->
+      <div id="review-panel-${r.id}" class="${r.status === 'pending' ? '' : 'hidden'} bg-primary/5 p-4 rounded-xl border border-primary/25 space-y-3">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-primary">fact_check</span>
+          <span class="font-label-caps text-xs text-primary uppercase font-bold tracking-wider">Awaiting Your Review</span>
+        </div>
+        <p class="text-xs text-on-surface-variant">This draft is not published yet. Approve it to publish it and let it inform future posts, or reject it to keep it out of the agent's memory.</p>
+        <input id="review-note-${r.id}" type="text" class="w-full bg-surface border border-glass-stroke rounded-lg p-2.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-on-surface-variant/50" placeholder="Optional note explaining your decision…">
+        <div class="flex justify-end gap-2">
+          <button id="reject-btn-${r.id}" onclick="reviewPost('${r.id}', 'reject')" class="px-4 py-2 bg-error/10 hover:bg-error/20 text-error border border-error/30 rounded-lg text-xs font-label-caps uppercase transition-all flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">close</span> Reject
+          </button>
+          <button id="approve-btn-${r.id}" onclick="reviewPost('${r.id}', 'approve')" class="px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-label-caps uppercase transition-all flex items-center gap-1.5 hover:bg-primary-fixed">
+            <span class="material-symbols-outlined text-sm">check</span> Approve & Publish
+          </button>
         </div>
       </div>
 
@@ -485,6 +504,19 @@ window.copyCurrentPostText = function(id) {
     navigator.clipboard.writeText(text);
     showToast("✓ Post copied to clipboard");
   }
+};
+
+// Where a post sits in the review flow, as a coloured pill. Kept in one place so the
+// modal, the published list and the post-review update all agree on the wording.
+window.statusBadge = function(status) {
+  const styles = {
+    pending:  ["Pending Review", "bg-secondary/15 text-secondary border-secondary/30"],
+    approved: ["Approved",       "bg-primary/15 text-primary border-primary/30"],
+    posted:   ["Posted",         "bg-primary/15 text-primary border-primary/30"],
+    rejected: ["Rejected",       "bg-error/10 text-error border-error/30"]
+  };
+  const [label, cls] = styles[status] || styles.approved;
+  return `<span class="px-2 py-0.5 rounded-full border text-[10px] font-label-caps uppercase ${cls}">${label}</span>`;
 };
 
 // Tracks reframes and restores that are still in flight, keyed by post id. The
@@ -644,6 +676,45 @@ window.loadDrafts = async function(id) {
       </div>
     `;
   }).join("");
+};
+
+window.reviewPost = async function(id, decision) {
+  if (inFlightPosts.has(id)) {
+    showToast("⏳ This post is already being updated — hold on.");
+    return;
+  }
+
+  const approveBtn = document.getElementById(`approve-btn-${id}`);
+  const rejectBtn = document.getElementById(`reject-btn-${id}`);
+  const noteEl = document.getElementById(`review-note-${id}`);
+  const note = noteEl ? noteEl.value.trim() : "";
+
+  inFlightPosts.add(id);
+  [approveBtn, rejectBtn].forEach(b => { if (b) b.disabled = true; });
+
+  try {
+    const result = await window.AdaAgentAPI.reviewPost(id, decision, note);
+
+    const badge = document.getElementById(`post-status-badge-${id}`);
+    if (badge) badge.innerHTML = statusBadge(result.status);
+
+    // The decision is made; the panel has nothing left to offer.
+    const panel = document.getElementById(`review-panel-${id}`);
+    if (panel) panel.classList.add("hidden");
+
+    showToast(result.status === "approved"
+      ? "✓ Approved — this post is now published"
+      : "✕ Rejected — kept on record, excluded from the agent's memory");
+
+    if (document.body.dataset.page === "published") {
+      renderPublishedList();
+    }
+  } catch (err) {
+    showToast(`⚠️ Could not save your decision: ${err.message}`);
+    [approveBtn, rejectBtn].forEach(b => { if (b) b.disabled = false; });
+  } finally {
+    inFlightPosts.delete(id);
+  }
 };
 
 window.restoreDraft = async function(id, version) {
@@ -969,7 +1040,7 @@ function updateHomeMetrics() {
   const nextRunVal = document.getElementById("next-run-value");
   const cyclesCountVal = document.getElementById("cycles-count-value");
   const spikedCountVal = document.getElementById("spiked-count-value");
-  const llmModelVal = document.getElementById("llm-model-value");
+  // Removed from index.html - the model name is already shown in full above.
 
   if (focus) focus.textContent = activity.articleTitle || "Idle / Monitoring sources";
   if (drafted) drafted.textContent = String(metrics.articles24h || 0);
@@ -997,7 +1068,15 @@ function updateHomeMetrics() {
 
   if (cyclesCountVal) cyclesCountVal.textContent = String(metrics.cycleCount || 0);
   if (spikedCountVal) spikedCountVal.textContent = String(metrics.spikedCount || 0);
-  if (llmModelVal) llmModelVal.textContent = metrics.llmModel ? metrics.llmModel.split('-')[0].toUpperCase() : "OK";
+
+  const pendingCountVal = document.getElementById("pending-count-value");
+  if (pendingCountVal) {
+    const pending = metrics.pendingCount || 0;
+    pendingCountVal.textContent = String(pending);
+    // Drafts sitting unreviewed are the one number here that asks something of the
+    // user, so it stops looking like ordinary telemetry once there are any.
+    pendingCountVal.className = `font-code-sm text-code-sm ${pending > 0 ? 'text-secondary font-bold' : 'text-on-surface-variant'}`;
+  }
 
   if (feed) {
     const feedLines = window.adaEngine.getFeedLines ? window.adaEngine.getFeedLines() : (metrics.feed || []);
@@ -1124,7 +1203,10 @@ function renderPublishedList() {
   }
 
   if (cat !== "ALL") {
-    published = published.filter(r => r.category.toUpperCase() === cat.toUpperCase());
+    // The dropdown now filters by review status. "Approved" includes posts already
+    // sent to LinkedIn, since those were approved first.
+    const wanted = cat.toUpperCase() === "APPROVED" ? ["approved", "posted"] : [cat.toLowerCase()];
+    published = published.filter(r => wanted.includes((r.status || "approved").toLowerCase()));
   }
 
   if (published.length === 0) {
@@ -1147,6 +1229,7 @@ function renderPublishedList() {
           <span class="font-code-sm text-[10px] leading-none text-primary">${escapeHtml(r.id.slice(0, 12))}</span>
           <span class="w-1 h-1 rounded-full bg-glass-stroke"></span>
           <span class="font-label-caps text-[10px] leading-none text-on-surface-variant">${r.category}</span>
+          ${statusBadge(r.status)}
         </div>
         <h3 onclick="openReportModal('${r.id}')" class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors cursor-pointer">${escapeHtml(r.title)}</h3>
       </div>

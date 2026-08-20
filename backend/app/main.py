@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -18,6 +19,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("autonomous_agent")
 
+# How long startup will wait for the LLM health check before giving up on it and
+# starting anyway. Deliberately shorter than a single LLM_TIMEOUT_SECONDS: the point
+# is to learn whether the provider answers promptly, not to wait out a slow call.
+STARTUP_LLM_CHECK_TIMEOUT_SECONDS = 20
+
 
 from backend.app.core.scheduler import rearm_active_agents, stop_all_agent_tasks
 
@@ -31,7 +37,26 @@ async def lifespan(app: FastAPI):
     # Fail loudly, not silently. A model that cannot return structured output breaks
     # every node, and the symptom is an empty feed rather than an error - so this is
     # checked once at startup and surfaced on /health for a deployed instance.
-    llm_ok, llm_detail = validate_llm_configuration()
+    #
+    # Bounded and off the event loop, because uvicorn runs lifespan startup BEFORE it
+    # binds the socket. The check builds a full retry-and-fallback chain, so a slow or
+    # rate-limited provider could hold the port closed for over ten minutes - which
+    # reads to a host like Render as a failed deploy rather than a configuration
+    # problem. The service should come up and report the fault on /health instead.
+    try:
+        llm_ok, llm_detail = await asyncio.wait_for(
+            asyncio.to_thread(validate_llm_configuration),
+            timeout=STARTUP_LLM_CHECK_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        llm_ok, llm_detail = False, (
+            f"Startup LLM check did not finish within {STARTUP_LLM_CHECK_TIMEOUT_SECONDS}s. "
+            "The service is running; the provider was slow or unreachable. "
+            "Publishing will fail until this clears."
+        )
+    except Exception as exc:
+        llm_ok, llm_detail = False, f"Startup LLM check raised {type(exc).__name__}: {exc}"
+
     app.state.llm_ok = llm_ok
     app.state.llm_detail = llm_detail
     if llm_ok:

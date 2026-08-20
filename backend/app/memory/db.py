@@ -40,6 +40,18 @@ def _apply_lightweight_migrations() -> None:
                 text("ALTER TABLE posts ADD COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'topic'")
             )
 
+    if "status" not in existing:
+        # Existing posts were live before review existed, so they become 'approved'
+        # rather than appearing in the queue as a backlog of things to decide on.
+        # New rows default to 'pending' through the ORM.
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE posts ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'approved'")
+            )
+            connection.execute(
+                text("ALTER TABLE posts ADD COLUMN reviewed_at DATETIME")
+            )
+
     _backfill_initial_revisions()
 
 

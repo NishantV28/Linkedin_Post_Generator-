@@ -1,4 +1,5 @@
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -25,9 +26,17 @@ from backend.app.schemas.agent import (
     RevisionItem,
     RevisionsResponse,
     RestoreRequest,
+    ReviewRequest,
+    ReviewResponse,
 )
 
+logger = logging.getLogger("autonomous_agent.api")
+
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+# The review states a post can be in. "posted" is reserved for once publishing to
+# LinkedIn exists; nothing sets it yet.
+VALID_POST_STATUSES = {"pending", "approved", "rejected", "posted"}
 
 
 def format_iso8601(dt) -> str:
@@ -101,10 +110,21 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/feed", response_model=FeedResponse)
-def get_feed(agentId: str = Query(..., description="Target Agent ID"), db: Session = Depends(get_db)):
+def get_feed(
+    agentId: str = Query(..., description="Target Agent ID"),
+    postStatus: Optional[str] = Query(
+        None,
+        description="Filter by review status: pending, approved, rejected, posted. "
+                    "Comma-separated values are allowed. Omit to return everything."
+    ),
+    db: Session = Depends(get_db)
+):
     """
     Read feed posts for a given agentId.
     Ordered by created_at DESC. Pure read endpoint, no LLM calls.
+
+    Posts now arrive as drafts, so the caller says which ones it wants: the review
+    queue asks for `pending`, the published view asks for `approved,posted`.
     """
     agent = db.query(AgentModel).filter(AgentModel.id == agentId).first()
     if not agent:
@@ -113,9 +133,19 @@ def get_feed(agentId: str = Query(..., description="Target Agent ID"), db: Sessi
             detail=f"Agent with id '{agentId}' not found."
         )
 
-    posts_query = db.query(PostModel).filter(
-        PostModel.agent_id == agentId
-    ).order_by(PostModel.created_at.desc()).all()
+    query = db.query(PostModel).filter(PostModel.agent_id == agentId)
+
+    if postStatus:
+        wanted = [s.strip() for s in postStatus.split(",") if s.strip()]
+        unknown = set(wanted) - VALID_POST_STATUSES
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown status {sorted(unknown)}. Valid values: {sorted(VALID_POST_STATUSES)}."
+            )
+        query = query.filter(PostModel.status.in_(wanted))
+
+    posts_query = query.order_by(PostModel.created_at.desc()).all()
 
     feed_items = []
     for post in posts_query:
@@ -130,11 +160,21 @@ def get_feed(agentId: str = Query(..., description="Target Agent ID"), db: Sessi
                 createdAt=format_iso8601(post.created_at),
                 text=post.text,
                 rationale=post.rationale,
-                sources=sources
+                sources=sources,
+                status=post.status,
+                reviewedAt=format_iso8601(post.reviewed_at) if post.reviewed_at else None
             )
         )
 
-    return FeedResponse(posts=feed_items)
+    # Always reported, whatever the filter, so the dashboard can badge the queue
+    # without a second request.
+    pending_count = (
+        db.query(func.count(PostModel.id))
+        .filter(PostModel.agent_id == agentId, PostModel.status == "pending")
+        .scalar()
+    ) or 0
+
+    return FeedResponse(posts=feed_items, pendingCount=pending_count)
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -365,3 +405,61 @@ def restore_post_revision(postId: str, req: RestoreRequest, db: Session = Depend
         rationale=updated_post.rationale or ""
     )
 
+
+
+def _review_post(db: Session, post_id: str, decision: str, note: Optional[str]) -> ReviewResponse:
+    """
+    Record a human decision on a draft.
+
+    Approving is what actually publishes a post: until then it exists only in the
+    review queue, is excluded from the writer's voice examples and from the QA
+    repetition corpus, and does not count against the agent's post budget.
+    """
+    post = db.query(PostModel).filter(PostModel.id == post_id).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post with id '{post_id}' not found."
+        )
+
+    if post.status == "posted":
+        # Already sent to LinkedIn - reversing it here would leave the two out of step.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This post has already been published externally and cannot be re-reviewed."
+        )
+
+    post.status = decision
+    post.reviewed_at = utc_now()
+
+    if note:
+        stamp = "Approved" if decision == "approved" else "Rejected"
+        post.rationale = f"{post.rationale}\n\n[{stamp} by reviewer]: {note}" if post.rationale else f"[{stamp} by reviewer]: {note}"
+
+    db.commit()
+    db.refresh(post)
+
+    logger.info(f"Post {post.id} marked '{decision}' by reviewer.")
+    return ReviewResponse(
+        postId=post.id,
+        status=post.status,
+        reviewedAt=format_iso8601(post.reviewed_at)
+    )
+
+
+@router.post("/post/{postId}/approve", response_model=ReviewResponse)
+def approve_post(postId: str, req: Optional[ReviewRequest] = None, db: Session = Depends(get_db)):
+    """Accept a draft. This is the step that makes a post real."""
+    return _review_post(db, postId, "approved", req.note if req else None)
+
+
+@router.post("/post/{postId}/reject", response_model=ReviewResponse)
+def reject_post(postId: str, req: Optional[ReviewRequest] = None, db: Session = Depends(get_db)):
+    """
+    Turn a draft down.
+
+    The row is kept rather than deleted, so the decision stays on the record and the
+    draft history remains readable - but a rejected post is excluded from memory, and
+    its subject is treated as still open for a future cycle.
+    """
+    return _review_post(db, postId, "rejected", req.note if req else None)

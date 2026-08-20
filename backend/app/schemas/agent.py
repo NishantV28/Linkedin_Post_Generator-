@@ -18,9 +18,12 @@ class FeedItem(BaseModel):
     text: str = Field(..., description="Post body text")
     rationale: str = Field(..., description="Rationale for why this post was selected/published")
     sources: List[str] = Field(default_factory=list, description="List of source URLs")
+    status: str = Field("approved", description="pending, approved, rejected or posted")
+    reviewedAt: Optional[str] = Field(None, description="When a human decided on this post")
 
 class FeedResponse(BaseModel):
     posts: List[FeedItem]
+    pendingCount: int = Field(0, description="How many drafts are waiting for review")
 
 class AgentStatusInfo(BaseModel):
     agentId: str
@@ -74,4 +77,14 @@ class RevisionsResponse(BaseModel):
 
 class RestoreRequest(BaseModel):
     version: int = Field(..., ge=1, description="The version number to make current again")
+
+
+class ReviewRequest(BaseModel):
+    note: Optional[str] = Field(None, max_length=2000, description="Optional reviewer note")
+
+
+class ReviewResponse(BaseModel):
+    postId: str
+    status: str = Field(..., description="pending, approved, rejected or posted")
+    reviewedAt: Optional[str] = Field(None, description="When the decision was made")
 

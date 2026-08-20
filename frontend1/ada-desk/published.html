@@ -153,14 +153,17 @@ Filter
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
 <input id="published-search-input" class="w-full bg-surface border border-glass-stroke rounded py-1.5 pl-9 pr-4 font-code-sm text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary outline-none" placeholder="Filter title, vector, or content..." type="text"/>
 </div>
+<!-- The old options (Vulnerability / Advisory / Analysis / Re-Evaluated) were left
+     over from removed seed data. Every real post is categorised "LINKEDIN POST", so
+     selecting any of them always produced an empty list. Review status is the
+     distinction that actually exists between posts now. -->
 <div class="flex items-center gap-2">
-<span class="font-label-caps text-[11px] text-on-surface-variant uppercase">Category:</span>
+<span class="font-label-caps text-[11px] text-on-surface-variant uppercase">Status:</span>
 <select id="published-category-select" class="bg-surface border border-glass-stroke rounded pl-3 pr-8 py-1.5 font-code-sm text-xs text-on-surface focus:border-primary outline-none cursor-pointer min-w-[160px]">
-<option value="ALL">All Categories</option>
-<option value="VULNERABILITY">Vulnerability</option>
-<option value="ADVISORY">Advisory</option>
-<option value="ANALYSIS">Analysis</option>
-<option value="RE-EVALUATED">Re-Evaluated</option>
+<option value="ALL">All Posts</option>
+<option value="PENDING">Awaiting Review</option>
+<option value="APPROVED">Approved</option>
+<option value="REJECTED">Rejected</option>
 </select>
 </div>
 <div class="flex items-center gap-2">

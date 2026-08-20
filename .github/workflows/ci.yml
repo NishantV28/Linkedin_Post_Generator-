@@ -1,0 +1,39 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Torch and chromadb dominate the install; the tests themselves take seconds.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the Dockerfile, so a passing build here means the same wheels
+          # resolve in the image.
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # CPU-only torch, as in the Dockerfile: the default wheel pulls CUDA
+          # libraries no CI runner uses and makes the install several times larger.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Run tests
+        # No API key is configured, and none is needed - every test stubs the model.
+        # A test that starts making real calls will fail here rather than quietly
+        # spending quota.
+        env:
+          ENVIRONMENT: test
+          LOG_LEVEL: WARNING
+        run: python -m pytest backend/tests -v

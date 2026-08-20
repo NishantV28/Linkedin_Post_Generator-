@@ -28,10 +28,15 @@ class MemoryRepository:
         rationale: str,
         sources: List[str],
         topic_title: Optional[str] = None,
-        kind: str = "topic"
+        kind: str = "topic",
+        status: str = "pending"
     ) -> PostModel:
         """
-        Saves a published post to SQLite and syncs its dense embedding to ChromaDB.
+        Save a post the agent has written and QA'd.
+
+        It arrives as a draft, not as published output: `status` defaults to "pending"
+        and a human decides from there. Nothing the agent writes goes out under
+        someone's name on the model's judgement alone.
         """
         post = PostModel(
             agent_id=agent_id,
@@ -40,6 +45,7 @@ class MemoryRepository:
             sources_json=json.dumps(sources),
             topic_title=topic_title or "Untitled Topic",
             kind=kind,
+            status=status,
             created_at=utc_now()
         )
 
@@ -215,10 +221,40 @@ class MemoryRepository:
 
     @staticmethod
     def get_recent_posts(db: Session, agent_id: str, limit: int = 5) -> List[PostModel]:
-        """Fetch the N most recent published posts for an agent."""
+        """
+        The N most recent approved posts for an agent.
+
+        Approved only, because callers use this as "what this persona has actually
+        said" - few-shot voice examples for the judge, and the corpus QA checks new
+        drafts against for repetition. A draft still awaiting review has not been said
+        by anyone yet.
+        """
         return db.query(PostModel).filter(
-            PostModel.agent_id == agent_id
+            PostModel.agent_id == agent_id,
+            PostModel.status.in_(("approved", "posted")),
         ).order_by(PostModel.created_at.desc()).limit(limit).all()
+
+    @staticmethod
+    def count_posts_in_window(db: Session, agent_id: str, since, statuses=("approved", "posted")) -> int:
+        """
+        How many posts count against the agent's budget since `since`.
+
+        Scoped two ways that the old all-time count was not. By time, so the constant
+        named for a 48-hour window actually means one - previously an agent that hit
+        the cap could never run again, even after being reactivated. And by status, so
+        the budget limits what a human let through rather than what the model produced;
+        drafts nobody approved should not exhaust it.
+        """
+        return (
+            db.query(func.count(PostModel.id))
+            .filter(
+                PostModel.agent_id == agent_id,
+                PostModel.status.in_(statuses),
+                PostModel.created_at >= since,
+            )
+            .scalar()
+            or 0
+        )
 
     @staticmethod
     def get_rejected_urls(db: Session, agent_id: str) -> set:

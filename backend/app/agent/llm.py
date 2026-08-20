@@ -99,7 +99,12 @@ def _throttle(value: Any) -> Any:
 
 def _build_structured(schema: Type[Any], model_name: Optional[str], temperature: float):
     """One model, bound to the schema, throttled and retried."""
-    llm = get_llm(model_name=model_name, temperature=temperature)
+    # Deliberately the raw client, not get_llm(): `with_structured_output` and
+    # `model_name` belong to the chat model, and get_llm may hand back a fallback
+    # wrapper that exposes neither. get_structured_llm adds its own fallback layer
+    # around the result anyway, so going through get_llm here would also nest one
+    # set of fallbacks inside another.
+    llm = _build_raw_llm(model_name=model_name, temperature=temperature)
     method = structured_output_method(llm.model_name)
     structured = (
         llm.with_structured_output(schema, method=method) if method
