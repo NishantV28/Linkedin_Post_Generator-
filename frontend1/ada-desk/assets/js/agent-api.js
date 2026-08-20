@@ -230,8 +230,32 @@ const AdaAgentAPI = {
       method: "POST",
       body: JSON.stringify({ postId, feedback })
     });
-    // Sync latest state
-    await this.sync();
+    // Refresh the dashboard, but never let a sync hiccup make a successful reframe
+    // look like a failure - the post has already been rewritten server-side by now.
+    try {
+      await this.sync();
+    } catch (err) {
+      console.warn("Reframe succeeded but the dashboard sync failed:", err);
+    }
+    return result;
+  },
+
+  async fetchRevisions(postId) {
+    if (!postId) throw new Error("Post ID is required.");
+    return this._request(`/agent/post/${encodeURIComponent(postId)}/revisions`);
+  },
+
+  async restoreRevision(postId, version) {
+    if (!postId || !version) throw new Error("Post ID and version are required.");
+    const result = await this._request(`/agent/post/${encodeURIComponent(postId)}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ version })
+    });
+    try {
+      await this.sync();
+    } catch (err) {
+      console.warn("Restore succeeded but the dashboard sync failed:", err);
+    }
     return result;
   }
 };

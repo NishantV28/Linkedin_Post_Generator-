@@ -1,9 +1,17 @@
 import json
 import logging
 from typing import List, Optional, Dict, Any
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from backend.app.memory.models import PostModel, RejectedTopicModel, CycleRunModel, AgentModel, utc_now
+from backend.app.memory.models import (
+    PostModel,
+    PostRevisionModel,
+    RejectedTopicModel,
+    CycleRunModel,
+    AgentModel,
+    utc_now,
+)
 from backend.app.memory.embeddings import embed
 from backend.app.memory.vector_store import add_post_vector
 
@@ -39,6 +47,19 @@ class MemoryRepository:
         db.commit()
         db.refresh(post)
 
+        # Version 1 - the post as the agent first wrote it. Recorded up front so the
+        # original wording survives any later reframe.
+        db.add(PostRevisionModel(
+            post_id=post.id,
+            version=1,
+            text=post.text,
+            rationale=post.rationale,
+            feedback=None,
+            source="original",
+            created_at=post.created_at
+        ))
+        db.commit()
+
         # Sync to ChromaDB
         embed_text = f"{topic_title or ''} {text}"
         vector = embed(embed_text)
@@ -54,40 +75,91 @@ class MemoryRepository:
         return post
 
     @staticmethod
+    def list_revisions(db: Session, post_id: str) -> List["PostRevisionModel"]:
+        """Every saved version of a post, oldest first."""
+        return (
+            db.query(PostRevisionModel)
+            .filter(PostRevisionModel.post_id == post_id)
+            .order_by(PostRevisionModel.version.asc())
+            .all()
+        )
+
+    @staticmethod
     def update_post(
         db: Session,
         post_id: str,
         new_text: str,
-        new_rationale: Optional[str] = None
+        new_rationale: Optional[str] = None,
+        feedback: Optional[str] = None,
+        source: str = "reframe"
     ) -> Optional[PostModel]:
         """
-        Updates an existing post's text (and optionally rationale) in SQLite and syncs updated vector embedding to ChromaDB.
+        Replace a post's text, keeping the previous wording as a numbered revision.
+
+        The embedding is computed before the commit rather than after: a failure there
+        used to leave SQLite holding the new text while ChromaDB kept the old vector
+        AND the old document, so deduplication and few-shot retrieval silently ran on
+        wording that no longer existed. Failing before the commit keeps the two stores
+        agreeing with each other.
         """
         post = db.query(PostModel).filter(PostModel.id == post_id).first()
         if not post:
             return None
 
+        if not new_text or len(new_text.split()) < 40:
+            # Guard against a blank or truncated model response overwriting a real post.
+            raise ValueError(
+                f"Refusing to replace post {post_id} with {len(new_text.split())} words."
+            )
+
+        embed_text = f"{post.topic_title or ''} {new_text}"
+        vector = embed(embed_text)
+
+        last_version = (
+            db.query(func.max(PostRevisionModel.version))
+            .filter(PostRevisionModel.post_id == post_id)
+            .scalar()
+        )
+        # A post created before revision tracking has no rows yet; its current text is
+        # version 1, so the incoming text becomes version 2.
+        if last_version is None:
+            db.add(PostRevisionModel(
+                post_id=post.id,
+                version=1,
+                text=post.text,
+                rationale=post.rationale,
+                feedback=None,
+                source="original",
+                created_at=post.created_at
+            ))
+            last_version = 1
+
         post.text = new_text
         if new_rationale is not None:
             post.rationale = new_rationale
 
+        db.add(PostRevisionModel(
+            post_id=post.id,
+            version=last_version + 1,
+            text=new_text,
+            rationale=new_rationale,
+            feedback=feedback,
+            source=source,
+            created_at=utc_now()
+        ))
+
         db.commit()
         db.refresh(post)
 
-        try:
-            embed_text = f"{post.topic_title or ''} {new_text}"
-            vector = embed(embed_text)
-            add_post_vector(
-                agent_id=post.agent_id,
-                post_id=post.id,
-                text=embed_text,
-                embedding=vector,
-                metadata={"topic_title": post.topic_title or "", "type": "published"}
-            )
-        except Exception as e:
-            logger.warning(f"Could not update vector store embedding for post {post_id}: {e}")
+        add_post_vector(
+            agent_id=post.agent_id,
+            post_id=post.id,
+            text=embed_text,
+            embedding=vector,
+            metadata={"topic_title": post.topic_title or "", "type": "published"}
+        )
 
-        logger.info(f"Updated post {post.id} with new reframed text.")
+        logger.info(f"Updated post {post.id} to version {last_version + 1} ({source}).")
         return post
 
     @staticmethod

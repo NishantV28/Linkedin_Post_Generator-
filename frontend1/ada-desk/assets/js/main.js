@@ -421,6 +421,24 @@ window.openReportModal = function(id) {
         </div>
       </div>
 
+      <!-- 2b. Draft history - every version this post has been through -->
+      <div class="border-t border-glass-stroke pt-4 space-y-3">
+        <button id="toggle-drafts-btn-${r.id}" onclick="toggleDrafts('${r.id}')" class="w-full py-2.5 px-4 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded-lg font-label-caps text-xs text-on-surface hover:text-secondary transition-colors flex items-center justify-between group">
+          <span class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-secondary text-base">history</span>
+            <span class="font-bold">View All Drafts</span>
+            <span id="drafts-count-${r.id}" class="text-[11px] text-on-surface-variant font-code-sm"></span>
+          </span>
+          <span class="material-symbols-outlined text-base transition-transform duration-200" id="drafts-arrow-${r.id}">expand_more</span>
+        </button>
+
+        <div id="drafts-section-${r.id}" class="hidden space-y-3 pt-2 transition-all">
+          <div id="drafts-list-${r.id}" class="space-y-3">
+            <p class="text-xs text-on-surface-variant font-code-sm">Loading drafts…</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 3. Interactive Button to Toggle Editorial Rationale & Sources -->
       <div class="border-t border-glass-stroke pt-4 space-y-3">
         <button id="toggle-rationale-btn-${r.id}" onclick="toggleRationale('${r.id}')" class="w-full py-2.5 px-4 bg-surface-container hover:bg-surface-container-high border border-glass-stroke rounded-lg font-label-caps text-xs text-on-surface hover:text-primary transition-colors flex items-center justify-between group">
@@ -455,6 +473,9 @@ window.openReportModal = function(id) {
   `;
 
   createModalOverlay("report-modal", `LinkedIn Post Details — ${r.id}`, body, footer);
+
+  // Show how many drafts exist without making the user expand the section first.
+  if (typeof refreshDraftCount === "function") refreshDraftCount(r.id);
 };
 
 window.copyCurrentPostText = function(id) {
@@ -465,6 +486,12 @@ window.copyCurrentPostText = function(id) {
     showToast("✓ Post copied to clipboard");
   }
 };
+
+// Tracks reframes and restores that are still in flight, keyed by post id. The
+// button's own `disabled` flag is not enough: closing and reopening the modal
+// rebuilds it as a fresh, enabled button, which would let a second request start
+// against the same post while the first is still running.
+const inFlightPosts = new Set();
 
 window.submitReframe = async function(id) {
   const textarea = document.getElementById(`reframe-feedback-${id}`);
@@ -478,7 +505,13 @@ window.submitReframe = async function(id) {
     return;
   }
 
+  if (inFlightPosts.has(id)) {
+    showToast("⏳ This post is already being updated — hold on.");
+    return;
+  }
+
   const feedback = textarea.value.trim();
+  inFlightPosts.add(id);
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">sync</span> Reframing post…`;
@@ -498,6 +531,14 @@ window.submitReframe = async function(id) {
     textarea.value = "";
     showToast("✨ Post reframed & restructured according to your feedback!");
 
+    // The draft list is now a version out of date, so refresh it if it's open.
+    const draftsSection = document.getElementById(`drafts-section-${id}`);
+    if (draftsSection && !draftsSection.classList.contains("hidden")) {
+      loadDrafts(id);
+    } else {
+      refreshDraftCount(id);
+    }
+
     // Re-render published list on page
     if (document.body.dataset.page === "published") {
       renderPublishedList();
@@ -505,10 +546,136 @@ window.submitReframe = async function(id) {
   } catch (err) {
     showToast(`⚠️ Reframing failed: ${err.message}`);
   } finally {
+    inFlightPosts.delete(id);
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = `<span class="material-symbols-outlined text-sm">auto_fix_high</span> Reframe Post with Feedback`;
     }
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Draft history
+//
+// Reframing replaces the post's text, so without this the previous wording is
+// invisible - the user can ask for a change but never compare it against what came
+// before, or undo an instruction that made the post worse.
+// ---------------------------------------------------------------------------
+
+window.toggleDrafts = function(id) {
+  const section = document.getElementById(`drafts-section-${id}`);
+  const arrow = document.getElementById(`drafts-arrow-${id}`);
+  if (!section) return;
+
+  const opening = section.classList.contains("hidden");
+  section.classList.toggle("hidden");
+  if (arrow) arrow.style.transform = opening ? "rotate(180deg)" : "rotate(0deg)";
+  if (opening) loadDrafts(id);
+};
+
+window.refreshDraftCount = async function(id) {
+  const countEl = document.getElementById(`drafts-count-${id}`);
+  if (!countEl) return;
+  try {
+    const data = await window.AdaAgentAPI.fetchRevisions(id);
+    const n = (data.revisions || []).length;
+    countEl.textContent = n > 1 ? `(${n} versions)` : "(1 version)";
+  } catch {
+    countEl.textContent = "";
+  }
+};
+
+window.loadDrafts = async function(id) {
+  const list = document.getElementById(`drafts-list-${id}`);
+  const countEl = document.getElementById(`drafts-count-${id}`);
+  if (!list) return;
+
+  list.innerHTML = `<p class="text-xs text-on-surface-variant font-code-sm">Loading drafts…</p>`;
+
+  let revisions;
+  try {
+    const data = await window.AdaAgentAPI.fetchRevisions(id);
+    revisions = data.revisions || [];
+  } catch (err) {
+    list.innerHTML = `<p class="text-xs text-error font-code-sm">Could not load drafts: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  if (!revisions.length) {
+    list.innerHTML = `<p class="text-xs text-on-surface-variant font-code-sm">No earlier drafts — this post has not been changed since it was written.</p>`;
+    if (countEl) countEl.textContent = "(1 version)";
+    return;
+  }
+
+  if (countEl) {
+    countEl.textContent = revisions.length > 1 ? `(${revisions.length} versions)` : "(1 version)";
+  }
+
+  // Newest first: the most recent drafts are the ones being compared right now.
+  const ordered = [...revisions].reverse();
+
+  const sourceLabel = {
+    original: "Originally written by the agent",
+    reframe: "Reframed from your feedback",
+    restore: "Restored from an earlier version"
+  };
+
+  list.innerHTML = ordered.map(rev => {
+    const when = rev.createdAt ? new Date(rev.createdAt).toLocaleString() : "";
+    const badge = rev.isCurrent
+      ? `<span class="px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 text-[10px] font-label-caps uppercase">Current</span>`
+      : `<button onclick="restoreDraft('${id}', ${rev.version})" class="px-2.5 py-1 rounded-md bg-secondary/15 hover:bg-secondary/25 text-secondary border border-secondary/30 text-[10px] font-label-caps uppercase transition-all flex items-center gap-1">
+           <span class="material-symbols-outlined text-xs">restore</span> Restore
+         </button>`;
+
+    const feedbackBlock = rev.feedback
+      ? `<div class="text-[11px] text-on-surface-variant italic border-l-2 border-secondary/40 pl-2 my-2">"${escapeHtml(rev.feedback)}"</div>`
+      : "";
+
+    return `
+      <div class="bg-surface-container-lowest/80 rounded-lg border ${rev.isCurrent ? 'border-primary/40' : 'border-glass-stroke'} p-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-label-caps text-xs text-on-surface font-bold">Version ${rev.version}</span>
+          ${badge}
+        </div>
+        <div class="text-[11px] text-on-surface-variant font-code-sm">${escapeHtml(sourceLabel[rev.source] || rev.source)} · ${escapeHtml(when)}</div>
+        ${feedbackBlock}
+        <div class="bg-surface p-3 rounded-md border border-glass-stroke text-xs whitespace-pre-wrap font-sans text-on-surface leading-relaxed max-h-48 overflow-y-auto select-text">${escapeHtml(rev.text)}</div>
+      </div>
+    `;
+  }).join("");
+};
+
+window.restoreDraft = async function(id, version) {
+  if (inFlightPosts.has(id)) {
+    showToast("⏳ This post is already being updated — hold on.");
+    return;
+  }
+
+  inFlightPosts.add(id);
+  showToast(`↺ Restoring version ${version}…`);
+
+  try {
+    const result = await window.AdaAgentAPI.restoreRevision(id, version);
+
+    const contentEl = document.getElementById(`post-content-${id}`);
+    if (contentEl) contentEl.textContent = result.text;
+
+    const rationaleEl = document.getElementById(`rationale-text-${id}`);
+    if (rationaleEl) {
+      rationaleEl.innerHTML = `<strong class="text-primary block mb-1">Editorial Rationale:</strong>${escapeHtml(result.rationale || '')}`;
+    }
+
+    await loadDrafts(id);
+    showToast(`✓ Version ${version} is now the published draft`);
+
+    if (document.body.dataset.page === "published") {
+      renderPublishedList();
+    }
+  } catch (err) {
+    showToast(`⚠️ Restore failed: ${escapeHtml(err.message)}`);
+  } finally {
+    inFlightPosts.delete(id);
   }
 };
 

@@ -57,3 +57,21 @@ class ReframeResponse(BaseModel):
     text: str = Field(..., description="The newly reframed post text")
     rationale: str = Field(..., description="The updated or preserved rationale")
 
+
+class RevisionItem(BaseModel):
+    version: int = Field(..., description="1 is the original; each change adds the next number")
+    text: str = Field(..., description="The post text as of this version")
+    feedback: Optional[str] = Field(None, description="The human instruction that produced this version")
+    source: str = Field(..., description="How this version came about: original, reframe or restore")
+    createdAt: str = Field(..., description="When this version was saved")
+    isCurrent: bool = Field(..., description="True for the version currently published")
+
+
+class RevisionsResponse(BaseModel):
+    postId: str
+    revisions: List[RevisionItem]
+
+
+class RestoreRequest(BaseModel):
+    version: int = Field(..., ge=1, description="The version number to make current again")
+

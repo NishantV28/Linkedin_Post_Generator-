@@ -22,6 +22,9 @@ from backend.app.schemas.agent import (
     RejectedTopicItem,
     ReframeRequest,
     ReframeResponse,
+    RevisionItem,
+    RevisionsResponse,
+    RestoreRequest,
 )
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -251,17 +254,113 @@ def reframe_existing_post(req: ReframeRequest, db: Session = Depends(get_db)):
             detail=f"Failed to reframe post: {str(e)}"
         )
 
-    # Update in DB & ChromaDB
+    # Update in DB & ChromaDB. The previous wording is kept as a numbered revision.
     updated_rationale = f"{post.rationale}\n\n[Human Feedback Revision]: {feedback}" if post.rationale else f"[Human Feedback Revision]: {feedback}"
-    updated_post = MemoryRepository.update_post(
-        db=db,
-        post_id=post_id,
-        new_text=new_text,
-        new_rationale=updated_rationale
-    )
+    try:
+        updated_post = MemoryRepository.update_post(
+            db=db,
+            post_id=post_id,
+            new_text=new_text,
+            new_rationale=updated_rationale,
+            feedback=feedback,
+            source="reframe"
+        )
+    except ValueError as e:
+        # The model returned something too short to be a real post. Better to say so
+        # than to overwrite a published post with it.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    if updated_post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post '{post_id}' no longer exists."
+        )
 
     return ReframeResponse(
         postId=post_id,
+        text=updated_post.text,
+        rationale=updated_post.rationale or ""
+    )
+
+
+@router.get("/post/{postId}/revisions", response_model=RevisionsResponse)
+def get_post_revisions(postId: str, db: Session = Depends(get_db)):
+    """
+    Every saved version of a post, oldest first.
+
+    Version 1 is what the agent originally wrote; each reframe or restore adds one.
+    """
+    post = db.query(PostModel).filter(PostModel.id == postId).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post with id '{postId}' not found."
+        )
+
+    revisions = MemoryRepository.list_revisions(db, postId)
+    latest = revisions[-1].version if revisions else None
+
+    return RevisionsResponse(
+        postId=postId,
+        revisions=[
+            RevisionItem(
+                version=rev.version,
+                text=rev.text,
+                feedback=rev.feedback,
+                source=rev.source,
+                createdAt=format_iso8601(rev.created_at),
+                isCurrent=(rev.version == latest)
+            )
+            for rev in revisions
+        ]
+    )
+
+
+@router.post("/post/{postId}/restore", response_model=ReframeResponse)
+def restore_post_revision(postId: str, req: RestoreRequest, db: Session = Depends(get_db)):
+    """
+    Make an earlier version current again.
+
+    This adds a new version rather than deleting the ones after it, so restoring is
+    itself undoable and the history stays a complete record of what happened.
+    """
+    post = db.query(PostModel).filter(PostModel.id == postId).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post with id '{postId}' not found."
+        )
+
+    target = next(
+        (r for r in MemoryRepository.list_revisions(db, postId) if r.version == req.version),
+        None
+    )
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {req.version} does not exist for post '{postId}'."
+        )
+
+    try:
+        updated_post = MemoryRepository.update_post(
+            db=db,
+            post_id=postId,
+            new_text=target.text,
+            new_rationale=target.rationale,
+            feedback=f"Restored version {req.version}",
+            source="restore"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    if updated_post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Post '{postId}' no longer exists."
+        )
+
+    return ReframeResponse(
+        postId=postId,
         text=updated_post.text,
         rationale=updated_post.rationale or ""
     )

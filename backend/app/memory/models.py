@@ -50,6 +50,39 @@ class PostModel(Base):
     kind = Column(String(32), nullable=False, default="topic", server_default="topic")
 
     agent = relationship("AgentModel", back_populates="posts")
+    revisions = relationship(
+        "PostRevisionModel",
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="PostRevisionModel.version"
+    )
+
+
+class PostRevisionModel(Base):
+    """
+    One saved version of a post's text.
+
+    Reframing used to overwrite `posts.text` in place, so the previous wording was
+    gone the moment a user asked for a change - there was no way to compare drafts or
+    undo a bad instruction. Every version is recorded here instead, including the
+    original, so the post's whole history stays readable and restorable.
+    """
+    __tablename__ = "post_revisions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    post_id = Column(String(36), ForeignKey("posts.id"), nullable=False, index=True)
+    # 1 is the post as first published; each reframe or restore adds the next number.
+    version = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    rationale = Column(Text, nullable=True)
+    # The human instruction that produced this version. Null for version 1, which the
+    # agent wrote on its own, and for restores.
+    feedback = Column(Text, nullable=True)
+    # "original" | "reframe" | "restore" - how this version came about.
+    source = Column(String(32), nullable=False, default="reframe")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    post = relationship("PostModel", back_populates="revisions")
 
 
 class RejectedTopicModel(Base):
