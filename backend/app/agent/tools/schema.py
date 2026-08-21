@@ -7,7 +7,7 @@ class TopicCandidate(BaseModel):
     title: str = Field(..., description="Headline or paper title")
     summary: str = Field(..., description="Abstract, snippet, or description text")
     url: str = Field(..., description="Source URL")
-    source: Literal["hn", "arxiv", "github", "web"] = Field(..., description="Discovery source origin")
+    source: Literal["hn", "arxiv", "github", "web", "rss"] = Field(..., description="Discovery source origin")
     published_at: str = Field(..., description="ISO 8601 publication or discovery timestamp")
     engagement: int = Field(
         0,

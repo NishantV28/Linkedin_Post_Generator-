@@ -111,6 +111,18 @@ HOW THIS SOUNDS WHEN IT WORKS
 That example demonstrates SHAPE and voice, not content. Never reuse its phrases. Write
 every line fresh for this specific source.
 
+THIS PERSONA'S OWN WRITING
+
+{voice_samples}
+
+Study how these open, how they move from setup to mechanism, where they place the
+number that matters, and how they stop. Match that. They are the voice you write in,
+not material to draw on: never reuse their sentences, subjects or framings.
+
+THE SHAPE FOR THIS POST
+
+{post_type_instruction}
+
 PAST WORK
 
 Match this voice, but do not repeat its content:
@@ -185,3 +197,37 @@ Sources:
 
 Write the post now.
 """
+
+
+# What each post type asks for. Every type still explains one idea from the judge's
+# handoff - they differ in where the post starts and what it leaves the reader with.
+# Written as instructions rather than templates, so the writer keeps its own voice.
+POST_TYPE_INSTRUCTIONS = {
+    "explainer": (
+        "Explain the mechanism. Open with the assumption a reader would arrive with, "
+        "show what the evidence actually says, then walk through how it works. This is "
+        "the default shape."
+    ),
+    "observation": (
+        "Lead with the pattern rather than the paper. Open with what you have noticed "
+        "across this work and what came before it, then use this source as the "
+        "concrete instance. Stay grounded in the supplied evidence: do not invent "
+        "other examples to support the pattern."
+    ),
+    "question": (
+        "Open a question the evidence raises and cannot settle. Explain the mechanism "
+        "far enough that the question is sharp rather than vague, and leave it open. "
+        "Do not answer it, and do not ask the reader to comment."
+    ),
+    "lesson": (
+        "Write for someone building with this. Open with the decision this affects, "
+        "explain the mechanism through its consequences, and be specific about what "
+        "changes in practice. No advice that does not follow from the evidence."
+    ),
+    "contrarian": (
+        "Start from how this result is being read, then show why that reading is "
+        "wrong, using the mechanism. Correct the interpretation, not the researchers - "
+        "and only when the supplied evidence genuinely supports the correction. If it "
+        "does not, write it as an explainer instead."
+    ),
+}

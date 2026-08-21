@@ -134,3 +134,8 @@ class AgentState(TypedDict):
     # True once such a fallback is in play. The router reads it to go straight to
     # publishing instead of re-running the judgement that already rejected the topic.
     forced_publish: bool
+    # The shape this post takes - explainer, observation, question, lesson or
+    # contrarian - drawn once from the persona's weighted mix. Held in state rather
+    # than re-drawn per node so a revision rewrites the same post instead of
+    # answering QA's feedback with a differently shaped one.
+    post_type: Optional[str]

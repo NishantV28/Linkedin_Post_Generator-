@@ -1,5 +1,7 @@
 import logging
 from backend.app.agent.state import AgentState
+from backend.app.core.config import settings
+from backend.app.agent.brand_safety import check_post, format_findings
 from backend.app.memory.db import SessionLocal
 from backend.app.memory.repository import MemoryRepository
 
@@ -65,6 +67,20 @@ def publish_node(state: AgentState) -> AgentState:
         return state
 
     full_rationale = _build_rationale(draft, state)
+
+    # Reputational review, separate from QA's style review. Findings are attached to
+    # the post rather than blocking it: a post that names a company while describing
+    # its published work is perfectly legitimate, and the reviewer is better placed
+    # than a regex to tell that apart. Attaching them means the reviewer is told.
+    safety_findings = []
+    if settings.BRAND_SAFETY_ENABLED:
+        safety_findings = check_post(draft.text)
+        if safety_findings:
+            logger.warning(
+                f"Brand safety flagged {len(safety_findings)} sentence(s) for review: "
+                f"{safety_findings[0].reason}"
+            )
+            full_rationale = f"{full_rationale}\n\n{format_findings(safety_findings)}"
 
     if is_reflection:
         # A reflection cites the posts it is reflecting on, so its sources are the

@@ -5,6 +5,14 @@ class PersonaInitInfo(BaseModel):
     name: str = Field(..., description="Name of the persona", json_schema_extra={"example": "Distill"})
     domain: str = Field(..., description="Domain of focus", json_schema_extra={"example": "AI Research"})
     bio: Optional[str] = Field(None, description="Optional bio override")
+    voiceSamples: Optional[List[str]] = Field(
+        None,
+        max_length=5,
+        description=(
+            "Two or three posts written by the user. These demonstrate the voice far "
+            "better than the preset's hand-written examples, so they replace them."
+        )
+    )
 
 class InitRequest(BaseModel):
     persona: PersonaInitInfo

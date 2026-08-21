@@ -45,6 +45,18 @@ class VoiceGuidelines(BaseModel):
         description="An exemplar post demonstrating shape and voice. A style anchor, never a template."
     )
 
+    # Adjectives describe a voice; examples demonstrate one, and models match the
+    # second far more reliably than the first. "Precise, unhurried, sceptical" leaves
+    # enormous latitude - three real posts do not.
+    #
+    # Hand-written for a preset, or supplied by the user at setup. User samples are
+    # the truest description of how that person actually writes, so they replace the
+    # preset's rather than being appended to them.
+    voice_samples: List[str] = Field(
+        default_factory=list,
+        description="Example posts demonstrating this voice. Style anchors, never templates."
+    )
+
     # Length, enforced programmatically.
     min_post_words: int = Field(100, description="Minimum post length in words")
     max_post_words: int = Field(180, description="Hard maximum, never exceeded")
@@ -63,6 +75,51 @@ class VoiceGuidelines(BaseModel):
     )
 
 
+class DiscoverySources(BaseModel):
+    """
+    Where this persona looks for material.
+
+    Previously every agent searched Hacker News, arXiv, GitHub and the web regardless
+    of its domain - reasonable for an AI-research persona and a poor fit for any
+    other, which quietly limited the persona system to one subject area. Making the
+    sources part of the identity means a persona in a different field can be given
+    somewhere sensible to read.
+    """
+    hacker_news: bool = Field(True, description="Hacker News front page and Show HN")
+    arxiv: bool = Field(True, description="arXiv recent submissions")
+    github: bool = Field(True, description="GitHub search by topic")
+    web_search: bool = Field(True, description="Tavily, or DuckDuckGo when no key is set")
+    rss_feeds: List[str] = Field(
+        default_factory=list,
+        description="Feed URLs specific to this persona's field"
+    )
+    search_terms: List[str] = Field(
+        default_factory=list,
+        description="Extra queries for web and GitHub search. Defaults to stable_interests when empty."
+    )
+
+
+# The shapes a post can take. Every post used to be the same one - an explanation of
+# a single source - which reads as monotonous over a run of a dozen. Each of these
+# still explains one idea; they differ in how they open and what they ask of a reader.
+POST_TYPES = ("explainer", "observation", "question", "lesson", "contrarian")
+
+
+class PostTypeMix(BaseModel):
+    """
+    How often each post type should appear, as relative weights.
+
+    Weights rather than a fixed rotation, so the mix stays natural rather than
+    cycling predictably, and so a persona can lean heavily towards one shape without
+    excluding the others.
+    """
+    explainer: int = Field(6, ge=0, description="Explains one mechanism from a source. The default shape.")
+    observation: int = Field(2, ge=0, description="A pattern noticed across several sources")
+    question: int = Field(1, ge=0, description="Opens a genuine question the evidence raises")
+    lesson: int = Field(1, ge=0, description="What this changes for someone building things")
+    contrarian: int = Field(1, ge=0, description="Where the obvious reading of the evidence is wrong")
+
+
 class PersonaConfig(BaseModel):
     """
     The persona's stable identity.
@@ -79,3 +136,5 @@ class PersonaConfig(BaseModel):
     editorial_thresholds: EditorialThresholds = Field(default_factory=EditorialThresholds)
     memory: MemoryWindows = Field(default_factory=MemoryWindows)
     posting_cadence_hours: PostingCadenceHours = Field(default_factory=PostingCadenceHours)
+    discovery_sources: DiscoverySources = Field(default_factory=DiscoverySources)
+    post_type_mix: PostTypeMix = Field(default_factory=PostTypeMix)

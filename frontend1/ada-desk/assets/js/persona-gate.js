@@ -51,11 +51,17 @@
       showGate(reason || "That agent no longer exists on the backend. Initialise a new one.");
     },
 
-    async initialise(name, domain) {
+    async initialise(name, domain, voiceSamples) {
+      const persona = { name, domain };
+      // Only sent when the user actually pasted something. An empty array would
+      // replace the preset's hand-written samples with nothing, leaving the writer
+      // no examples at all.
+      if (voiceSamples && voiceSamples.length) persona.voiceSamples = voiceSamples;
+
       const response = await fetch(`${apiBase()}/agent/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ persona: { name, domain } }),
+        body: JSON.stringify({ persona }),
       });
       if (!response.ok) {
         throw new Error(`Initialisation failed (${response.status}): ${await response.text()}`);
@@ -85,6 +91,20 @@
           ${DOMAINS.map((d) => `<option value="${d}">${d}</option>`).join("")}
         </select>
 
+        <details class="mb-4 rounded-lg border border-glass-stroke bg-surface-container/40 p-3">
+          <summary class="cursor-pointer text-sm text-on-surface">
+            Write in your own voice <span class="text-on-surface-variant">(optional)</span>
+          </summary>
+          <p class="mt-3 mb-2 text-xs text-on-surface-variant">
+            Paste two or three posts you have written. The agent matches how you
+            actually write far more closely from examples than from a description of
+            your tone. Separate each post with a blank line.
+          </p>
+          <textarea id="ada-gate-voice" rows="6"
+            class="w-full rounded-lg border border-glass-stroke bg-surface p-3 text-xs text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/50"
+            placeholder="Paste a post you have written...&#10;&#10;Paste another..."></textarea>
+        </details>
+
         <button id="ada-gate-submit"
           class="w-full rounded-lg bg-primary px-4 py-2.5 font-semibold text-surface-container-lowest hover:opacity-90 disabled:opacity-50">
           Initialise agent
@@ -110,6 +130,7 @@
 
     const nameInput = overlay.querySelector("#ada-gate-name");
     const domainInput = overlay.querySelector("#ada-gate-domain");
+    const voiceInput = overlay.querySelector("#ada-gate-voice");
     const submit = overlay.querySelector("#ada-gate-submit");
     const error = overlay.querySelector("#ada-gate-error");
 
@@ -121,6 +142,14 @@
     async function go() {
       const name = nameInput.value.trim();
       const domain = domainInput.value;
+
+      // Blank lines separate posts. Anything too short to show a voice is dropped
+      // rather than sent, since a stray line would dilute the real samples.
+      const voiceSamples = (voiceInput?.value || "")
+        .split(/\n\s*\n/)
+        .map((s) => s.trim())
+        .filter((s) => s.split(/\s+/).length >= 30)
+        .slice(0, 5);
       if (!name) {
         error.textContent = "Enter a persona name.";
         error.classList.remove("hidden");
@@ -131,7 +160,7 @@
       submit.textContent = "Initialising...";
       error.classList.add("hidden");
       try {
-        await AdaPersona.initialise(name, domain);
+        await AdaPersona.initialise(name, domain, voiceSamples);
         window.location.reload();
       } catch (err) {
         error.textContent = `${err.message}. Is the backend running on ${apiBase()}?`;

@@ -7,7 +7,7 @@ Every rule here exists because a live run violated it.
 """
 
 import re
-from typing import List
+from typing import List, Tuple
 
 # Shortest run of shared words treated as copying rather than coincidence. Five is long
 # enough that ordinary phrasing ("it is worth noting that") does not trip it.
@@ -137,3 +137,68 @@ def borrowed_phrases(draft: str, example: str, min_run: int = MIN_BORROWED_RUN_W
         else:
             i += 1
     return found
+
+
+def score_draft(text: str, voice, worked_example: str = "") -> Tuple[int, List[str]]:
+    """
+    Rank drafts of the same topic against the persona's own rules.
+
+    Used when several drafts are written from one editorial handoff and only the best
+    is kept. This is deliberately the same deterministic vocabulary the QA judge
+    applies, so picking a winner here means picking the one most likely to survive QA
+    - rather than asking a model which of its own drafts it prefers, which it is not
+    reliable at.
+
+    Returns (score, faults). Higher is better; 100 is a draft with nothing against it.
+    """
+    faults: List[str] = []
+    score = 100
+
+    if voice.forbid_em_dashes and em_dashes(text):
+        faults.append("uses em-dashes")
+        score -= 25
+
+    long_sentences = overlong_sentences(text, voice.max_sentence_words)
+    if long_sentences:
+        faults.append(f"{len(long_sentences)} sentence(s) over {voice.max_sentence_words} words")
+        score -= 10 * len(long_sentences)
+
+    if voice.forbid_parenthetical_definitions and parenthetical_definitions(text):
+        faults.append("defines jargon in brackets")
+        score -= 15
+
+    if voice.forbid_closing_takeaway and closing_takeaway(text):
+        faults.append("ends on a takeaway")
+        score -= 20
+
+    leaks = scaffolding_leaks(text)
+    if leaks:
+        faults.append(f"leaks scaffolding: {', '.join(leaks[:2])}")
+        score -= 15 * len(leaks)
+
+    lowered = text.lower()
+    banned = [p for p in voice.forbidden_phrases if p.lower() in lowered]
+    if banned:
+        faults.append(f"forbidden phrase: {', '.join(banned[:2])}")
+        score -= 20 * len(banned)
+
+    if worked_example:
+        borrowed = borrowed_phrases(text, worked_example)
+        if borrowed:
+            faults.append(f"borrows from the example: {borrowed[0]!r}")
+            score -= 20 * len(borrowed)
+
+    # Length is scored by distance from the band rather than pass/fail, so a draft
+    # three words over loses to a clean one without being discarded outright.
+    # Hashtags are excluded: they are part of the post but not part of the prose, and
+    # counting them pushed otherwise well-judged drafts past the limit.
+    prose = re.sub(r"\n*(?:#\w+\s*)+$", "", text).strip()
+    count = len(_words(prose))
+    if count < voice.min_post_words:
+        faults.append(f"short at {count} words")
+        score -= min(30, (voice.min_post_words - count))
+    elif count > voice.max_post_words:
+        faults.append(f"long at {count} words")
+        score -= min(30, (count - voice.max_post_words))
+
+    return score, faults

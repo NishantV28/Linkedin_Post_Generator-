@@ -28,10 +28,11 @@ One **cycle** runs like this:
 1. **Discover** — pulls candidate stories from Hacker News, arXiv, GitHub Search, and web search (Tavily if configured, DuckDuckGo otherwise). One source failing doesn't stop the others.
 2. **Triage** — deterministic filters remove stale, thin, low-credibility, previously-rejected and duplicate candidates, then reorder what's left so subjects close to the last post come later. No LLM calls here.
 3. **Judge** — the editorial judge scores one candidate at a time against the persona's thresholds. Rejections are recorded with their scores.
-4. **Write** — the writer drafts a post in the persona's voice, ending with 3–5 topic hashtags.
+4. **Write** — the writer drafts the post in the persona's voice, ending with 3–5 topic hashtags. It picks a shape for this post from the persona's weighted mix (explainer, observation, question, lesson, contrarian), writes `WRITER_DRAFT_ATTEMPTS` drafts from different angles, and keeps whichever scores best against the persona's own deterministic rules.
 5. **QA** — deterministic rules (forbidden phrases, sentence length, word count, no em-dashes, no closing takeaway) plus model checks for grounding, repetition and single-idea focus. Failing sends the draft back for revision, up to 3 times.
-6. **Save as a draft** — a passing post is written to SQLite with status `pending` and embedded into ChromaDB, so future cycles can tell the topic is already in hand.
-7. **Review** — you approve or reject it in the dashboard. **Nothing is published on the model's judgement alone**, since posts go out under a real person's name.
+6. **Brand-safety check** — a deterministic pass for unhedged claims about named companies or people. Findings are attached to the post for the reviewer rather than blocking it, since naming a company while describing its published work is perfectly legitimate.
+7. **Save as a draft** — a passing post is written to SQLite with status `pending` and embedded into ChromaDB, so future cycles can tell the topic is already in hand.
+8. **Review** — you approve or reject it in the dashboard. **Nothing is published on the model's judgement alone**, since posts go out under a real person's name.
 
 If the agent notices a pattern in its own recent coverage, it can instead write a **reflection** post about that, rather than a new source.
 
@@ -48,7 +49,11 @@ Approval is what makes a post real, and it decides more than visibility:
 
 So an unreviewed draft — including one shaped by whatever someone typed into the feedback box — cannot influence what the agent writes next until a human has agreed it was any good. Rejecting a post keeps it on record but releases its topic for a future cycle.
 
-**Personas** are presets (`Distill`, `Ada`) defining domain, voice, forbidden phrases, word bounds, judge thresholds and posting cadence. The persona chosen at setup is frozen with the agent.
+**Personas** are presets (`Distill`, `Ada`) defining domain, voice, forbidden phrases, word bounds, judge thresholds, posting cadence, discovery sources and post-type mix. The persona chosen at setup is frozen with the agent.
+
+Each preset ships **voice samples** — three complete posts demonstrating how it writes. Models match a voice from examples far more reliably than from adjectives, so these matter more than the tone description does. At setup you can paste two or three of **your own** posts instead, under "Write in your own voice"; those replace the preset's, since your writing describes your voice better than anything hand-written could.
+
+**Discovery sources are part of the persona too.** A persona outside AI research can be pointed at its own RSS feeds and search terms rather than being stuck with Hacker News and arXiv.
 
 ---
 
@@ -136,7 +141,9 @@ python -m pytest backend/tests -v
 | `LOG_LEVEL` | No | `INFO` | |
 | `CADENCE_MIN_HOURS` / `CADENCE_MAX_HOURS` | No | `2.0` / `5.0` | Used only when the persona defines no cadence. |
 | `CADENCE_OVERRIDE_MIN_HOURS` / `..._MAX_HOURS` | No | unset | Demo override — makes a full loop observable in minutes. |
-| `MAX_POSTS_48H` | No | `16` | Safety cap. |
+| `MAX_POSTS_48H` | No | `16` | Safety cap. Counts approved posts in the current window. |
+| `WRITER_DRAFT_ATTEMPTS` | No | `2` | Drafts written per topic, best kept. Costs this many writer calls per topic; set to `1` when quota is tight. |
+| `BRAND_SAFETY_ENABLED` | No | `true` | Flags unhedged claims about named parties for the reviewer. |
 | `HOST` / `PORT` | No | `0.0.0.0` / `8000` | The Dockerfile hardcodes these; setting them has no effect on Render. |
 
 **Placeholders count as missing.** `GROQ_API_KEY=your_groq_api_key_here` is explicitly rejected, and the startup check reports "No LLM API key provided" rather than an auth error.
@@ -267,13 +274,23 @@ Approval exists; three things would make it good:
 - **Feedback presets** — *Shorter · Punchier · More technical · Add an example* — instead of a free-text box. Faster to use, and it closes most of the prompt-injection surface as a side effect.
 - **Notify when something needs review.** A queue nobody is told about is just a queue. Email, Slack or a webhook on `pending`.
 
-### 3. Make the output better
+### 3. Measure prompt changes
 
-- **Voice samples in the persona preset.** LLMs match style from examples, not adjectives. Better still, let a user paste three of their own posts and derive the voice from those.
-- **Generate 2–3 drafts with different angles, keep the best.** Revision loops converge on "less wrong"; parallel drafts find "better".
-- **A golden-set eval harness** — freeze ~20 real candidates, diff the judge's decisions before and after a prompt change. This would have caught the hashtag/word-count regression immediately.
-- **Post-type variety** and **per-persona discovery sources**, so the persona system works beyond AI research.
-- **A brand-safety check.** QA judges style, not reputational risk. Unhedged claims about named companies are a different problem from em-dashes.
+An eval harness now exists but has no baseline. Before the next prompt change, run it
+and keep the result:
+
+```powershell
+python -m backend.evals.run_eval --save baseline.json
+# ...change a prompt...
+python -m backend.evals.run_eval --compare baseline.json
+```
+
+It runs ten frozen candidates through the editorial judge and reports which decisions
+moved. Cases sit near the boundary on purpose: a set of obvious accepts and obvious
+rejects agrees with itself under any prompt and measures nothing. It makes real model
+calls, so it is not part of CI.
+
+Still worth adding: **prompt versioning**, so a post records which prompt wrote it.
 
 ### 4. Make it actually autonomous
 
@@ -319,7 +336,7 @@ backend/app/
     nodes/             editorial_judge · writer · reflection_writer · qa_judge · publish · rejection_logger
     prompts/           System prompts per node
     persona/           Presets, schema, deterministic voice rules
-    tools/             hn · arxiv · github_trending · web_search · prefilter · discovery
+    tools/             hn · arxiv · github_trending · web_search · rss · prefilter · discovery
   memory/
     models.py          SQLAlchemy models incl. PostRevisionModel + post status
     db.py              Engine, init, lightweight migrations
@@ -327,7 +344,9 @@ backend/app/
     embeddings.py      SentenceTransformer singleton
     vector_store.py    ChromaDB client
     hybrid_retriever.py  Dense + BM25 dedup and spacing
-  tests/               Node-level tests (phase1–4) + test_graph_e2e.py (whole-cycle)
+    brand_safety.py    Reputational check on a finished draft
+  tests/               Node-level tests (phase1-5) + test_graph_e2e.py (whole-cycle)
+  evals/               Golden-set harness for measuring prompt changes
 
 frontend1/ada-desk/    Static dashboard — index · published · spiked · cycle-log · api
 scripts/               Manual test scripts for cycles, discovery, scheduling

@@ -20,8 +20,18 @@ def fetch_web_candidates(persona: PersonaConfig, limit: int = 3) -> List[TopicCa
     candidates: List[TopicCandidate] = []
     api_key = settings.TAVILY_API_KEY or os.getenv("TAVILY_API_KEY")
 
-    query_keywords = [k for k in persona.stable_interests if not k.startswith("cs.")]
-    query = f"latest {query_keywords[0] if query_keywords else persona.domain} research breakthrough"
+    # Persona-specific search terms take precedence: stable_interests describe what
+    # the persona cares about, which is not always what you would type into a search
+    # box. Falls back to interests, then to the domain.
+    sources_cfg = getattr(persona, "discovery_sources", None)
+    search_terms = list(getattr(sources_cfg, "search_terms", []) or [])
+    if not search_terms:
+        search_terms = [k for k in persona.stable_interests if not k.startswith("cs.")]
+
+    query = (
+        f"latest {search_terms[0]} research breakthrough" if search_terms
+        else f"latest {persona.domain} research breakthrough"
+    )
 
     if api_key:
         try:

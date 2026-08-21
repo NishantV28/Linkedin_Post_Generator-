@@ -85,6 +85,15 @@ async def init_agent(req: InitRequest, db: Session = Depends(get_db)):
     if persona_info.bio:
         persona_config.bio = persona_info.bio
 
+    if persona_info.voiceSamples:
+        # Replace rather than extend. Someone's own posts are a better description of
+        # how they write than anything shipped in a preset, and mixing the two would
+        # dilute the voice the user is asking for. Blank entries are dropped so an
+        # empty textarea does not count as a sample.
+        samples = [s.strip() for s in persona_info.voiceSamples if s and s.strip()]
+        if samples:
+            persona_config.voice_guidelines.voice_samples = samples
+
     now = utc_now()
     cadence = persona_config.posting_cadence_hours
     min_h, max_h = resolve_cadence(cadence.min_hours, cadence.max_hours)

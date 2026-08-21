@@ -46,6 +46,10 @@ SOURCE_EVIDENCE_CEILING = {
     "github": 3.5,
     "hn": 3.5,
     "web": 3.0,
+    # Feeds the persona named deliberately, so rated above general web search:
+    # choosing a publication is itself an editorial judgement. Still below arXiv,
+    # since a feed carries neither peer review nor community vetting.
+    "rss": 3.5,
 }
 
 # Discussion volume at which a submission counts as community-vetted, and the ceiling

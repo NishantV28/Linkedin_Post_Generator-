@@ -46,7 +46,18 @@ class Settings(BaseSettings):
     CADENCE_OVERRIDE_MAX_HOURS: Optional[float] = None
 
     MAX_POSTS_48H: int = 16
-    
+
+    # Drafts written per topic on the first pass, keeping the best. Revising one draft
+    # against QA feedback makes it less wrong; writing several from different angles
+    # is what finds a better post. Costs this many writer calls per topic, so set it
+    # to 1 when quota is tight.
+    WRITER_DRAFT_ATTEMPTS: int = 2
+
+    # Refuse to publish a post that names a company or person alongside an unhedged
+    # claim. QA checks style; this is about what a post asserts under a real person's
+    # name, which is a different kind of risk.
+    BRAND_SAFETY_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

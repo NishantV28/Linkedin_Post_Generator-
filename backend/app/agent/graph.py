@@ -29,6 +29,8 @@ def start_cycle(state: AgentState) -> AgentState:
     state["rejected_this_cycle"] = []
     state["evaluated_candidates"] = []
     state["forced_publish"] = False
+    # Drawn by the writer on its first pass and held for any revision.
+    state["post_type"] = None
     state["node_error"] = None
     state["published_post"] = None
     state["cycle_outcome"] = "in_progress"
