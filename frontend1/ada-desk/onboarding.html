@@ -235,30 +235,50 @@
       submitBtn.innerHTML = `<span class="material-symbols-outlined text-base animate-spin">sync</span> Initializing Agent & Research Feeds…`;
       errorMsg.classList.add("hidden");
 
-      const apiBase = (window.adaEngine && window.adaEngine.getSettings ? window.adaEngine.getSettings().apiUrl : "http://127.0.0.1:8000/api").replace(/\/$/, "");
+      const payload = { persona: { name, domain } };
+      if (voiceSamples.length) payload.persona.voiceSamples = voiceSamples;
 
-      try {
-        const payload = { persona: { name, domain } };
-        if (voiceSamples.length) payload.persona.voiceSamples = voiceSamples;
+      // Candidate API endpoints to try (direct FastAPI first, then relative proxy)
+      const endpoints = [
+        "http://127.0.0.1:8000/api/agent/init",
+        "/api/agent/init"
+      ];
 
-        const res = await fetch(`${apiBase}/agent/init`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      let lastError = null;
+      let initialized = false;
 
-        if (!res.ok) {
-          throw new Error(`Initialization failed (${res.status}): ${await res.text()}`);
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("ada_backend_agent_id", data.agentId);
+            localStorage.setItem("ada_persona", JSON.stringify({ name, domain }));
+            initialized = true;
+            window.location.href = "index.html";
+            return;
+          } else {
+            lastError = `Server returned ${res.status}: ${await res.text()}`;
+          }
+        } catch (err) {
+          lastError = err.name === "AbortError" 
+            ? "Request timed out after 8s."
+            : (err.message || "Failed to reach backend server.");
         }
+      }
 
-        const data = await res.json();
-        localStorage.setItem("ada_backend_agent_id", data.agentId);
-        localStorage.setItem("ada_persona", JSON.stringify({ name, domain }));
-
-        // Seamlessly move to main dashboard
-        window.location.href = "index.html";
-      } catch (err) {
-        showError(`${err.message}. Is the backend running on ${apiBase}?`);
+      if (!initialized) {
+        showError(`${lastError} Please ensure the backend is running with:\npython -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload`);
         submitBtn.disabled = false;
         submitBtn.innerHTML = `<span class="material-symbols-outlined text-base">rocket_launch</span> Launch Autonomous Desk`;
       }

@@ -62,17 +62,38 @@
       const persona = { name, domain };
       if (voiceSamples && voiceSamples.length) persona.voiceSamples = voiceSamples;
 
-      const response = await fetch(`${apiBase()}/agent/init`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ persona }),
-      });
-      if (!response.ok) {
-        throw new Error(`Initialisation failed (${response.status}): ${await response.text()}`);
+      const endpoints = [
+        "http://127.0.0.1:8000/api/agent/init",
+        "/api/agent/init"
+      ];
+
+      let lastError = null;
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ persona }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const { agentId } = await response.json();
+            this.save(agentId, { name, domain });
+            return agentId;
+          } else {
+            lastError = `Status ${response.status}: ${await response.text()}`;
+          }
+        } catch (err) {
+          lastError = err.name === "AbortError" ? "Request timed out after 8s." : err.message;
+        }
       }
-      const { agentId } = await response.json();
-      this.save(agentId, { name, domain });
-      return agentId;
+
+      throw new Error(lastError || "Could not reach FastAPI backend server.");
     },
   };
 
