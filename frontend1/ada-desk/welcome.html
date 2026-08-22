@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Distill — Autonomous AI Research Publishing</title>
+  <script>
+    (function() {
+      var savedTheme = localStorage.getItem("ada-theme");
+      if (savedTheme === "light") {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      } else {
+        document.documentElement.classList.remove("light");
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="assets/js/tailwind-config.js"></script>
+  <link rel="stylesheet" href="assets/css/styles.css"/>
+  <style>
+    .hero-glow {
+      background: radial-gradient(circle at 50% 30%, rgba(78, 222, 163, 0.15), transparent 70%);
+    }
+    .grid-pattern {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    .badge-pill {
+      backdrop-filter: blur(12px);
+      background: rgba(78, 222, 163, 0.08);
+      border: 1px solid rgba(78, 222, 163, 0.25);
+    }
+  </style>
+</head>
+<body class="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen bg-surface-container-lowest text-on-surface flex flex-col relative selection:bg-primary/30 selection:text-primary">
+
+  <!-- Background Ambient Glow & Grid -->
+  <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden hero-glow">
+    <div class="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-primary/10 blur-[140px] rounded-full"></div>
+    <div class="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-secondary/10 blur-[160px] rounded-full"></div>
+    <div class="absolute inset-0 grid-pattern opacity-60"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="relative z-50 border-b border-glass-stroke bg-surface/70 backdrop-blur-2xl">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-primary/15 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_15px_rgba(78,222,163,0.25)]">
+          <span class="material-symbols-outlined text-2xl">auto_awesome</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="font-headline-lg text-2xl font-extrabold text-on-surface tracking-tight leading-none">Distill</span>
+          <span class="font-code-sm text-[10px] text-primary tracking-widest uppercase mt-0.5">Autonomous AI Editorial Desk</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <button data-theme-toggle class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-lg hover:bg-surface-container-high" title="Toggle Theme">
+          <span class="material-symbols-outlined text-xl" data-theme-icon>light_mode</span>
+        </button>
+        <a id="existing-dashboard-btn" href="index.html" class="hidden text-xs font-code-sm text-on-surface-variant hover:text-primary transition-colors py-2 px-3.5 border border-glass-stroke rounded-lg bg-surface-container hover:bg-surface-container-high">
+          Open Dashboard →
+        </a>
+        <a href="onboarding.html" class="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-fixed text-on-primary text-xs font-label-caps uppercase tracking-wider font-bold transition-all shadow-md hover:shadow-primary/20 flex items-center gap-2">
+          <span>Get Started</span>
+          <span class="material-symbols-outlined text-sm">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-16 md:py-24 max-w-6xl mx-auto text-center">
+    
+    <!-- Top Feature Pill -->
+    <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full badge-pill text-primary text-xs font-code-sm mb-8 animate-fade-in">
+      <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+      <span>Autonomous Agent Engine • arXiv & Community Research Translator</span>
+      <span class="text-on-surface-variant/40">|</span>
+      <span class="text-on-surface-variant">LinkedIn Publishing</span>
+    </div>
+
+    <!-- Main Headline -->
+    <h1 class="font-headline-xl text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-on-surface tracking-tight max-w-4xl leading-[1.1] mb-6">
+      Translate Deep AI Research Into <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-primary-light to-secondary">High-Signal</span> LinkedIn Posts
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="font-body-md text-base sm:text-lg md:text-xl text-on-surface-variant max-w-3xl leading-relaxed mb-10">
+      Distill scans arXiv, HackerNews, and GitHub in your specialized AI subfield, isolates the single technical mechanism that actually matters, and publishes authoritative, hype-free content under your persona.
+    </p>
+
+    <!-- CTAs -->
+    <div class="flex flex-col sm:flex-row items-center gap-4 w-full justify-center mb-16">
+      <a href="onboarding.html" class="w-full sm:w-auto px-8 py-4 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary font-label-caps uppercase text-sm tracking-wider font-bold transition-all shadow-lg hover:shadow-primary/30 flex items-center justify-center gap-2.5 group">
+        <span class="material-symbols-outlined text-xl">rocket_launch</span>
+        <span>Configure Your Agent Persona</span>
+        <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+      </a>
+      <a href="api.html" class="w-full sm:w-auto px-6 py-4 rounded-xl bg-surface border border-glass-stroke hover:border-outline text-on-surface font-label-caps uppercase text-sm tracking-wider font-semibold transition-all hover:bg-surface-container flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-lg text-primary">terminal</span>
+        <span>View API Specs</span>
+      </a>
+    </div>
+
+    <!-- Supported AI Domain Badges -->
+    <div class="w-full max-w-4xl pt-6 border-t border-glass-stroke/60">
+      <p class="text-[11px] font-label-caps text-on-surface-variant uppercase tracking-widest mb-4">Supported AI Subfields & Specialized Tracks</p>
+      <div class="flex flex-wrap items-center justify-center gap-2 text-xs font-code-sm">
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">🤖 AI Agents & Tool Calling</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">🧠 LLM Reasoning & RLHF</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">👁️ Vision-Language & Multimodal</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">🦾 Robotics & Embodied VLA</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">🎨 Diffusion & Flow Matching</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">🛡️ Prompt Injection & Red Teaming</span>
+        <span class="px-3 py-1.5 rounded-lg bg-surface border border-glass-stroke text-on-surface">⚡ Quantization & vLLM Serving</span>
+      </div>
+    </div>
+
+    <!-- 4-Step Pipeline Showcase Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 w-full mt-16 text-left">
+      <div class="glass-panel p-5 rounded-xl border border-glass-stroke space-y-2.5 relative group hover:border-primary/40 transition-all">
+        <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-sm font-bold font-code-sm">
+          01
+        </div>
+        <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-primary">travel_explore</span>
+          Discovery & Triage
+        </h3>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Aggregates new papers, repos, and debates matching your AI domain while dropping noise and promotional fluff.
+        </p>
+      </div>
+
+      <div class="glass-panel p-5 rounded-xl border border-glass-stroke space-y-2.5 relative group hover:border-primary/40 transition-all">
+        <div class="w-8 h-8 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary flex items-center justify-center text-sm font-bold font-code-sm">
+          02
+        </div>
+        <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-secondary">balance</span>
+          Editorial Judge
+        </h3>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Evaluates technical evidence, novelty, and explainability. Isolates the one concrete mechanism worth explaining.
+        </p>
+      </div>
+
+      <div class="glass-panel p-5 rounded-xl border border-glass-stroke space-y-2.5 relative group hover:border-primary/40 transition-all">
+        <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-sm font-bold font-code-sm">
+          03
+        </div>
+        <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-primary">edit_note</span>
+          Mechanism Writer
+        </h3>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Drafts posts matching your tone and cadence with verified claims, concise sentences, and relevant topic hashtags.
+        </p>
+      </div>
+
+      <div class="glass-panel p-5 rounded-xl border border-glass-stroke space-y-2.5 relative group hover:border-primary/40 transition-all">
+        <div class="w-8 h-8 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary flex items-center justify-center text-sm font-bold font-code-sm">
+          04
+        </div>
+        <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-secondary">rate_review</span>
+          Review & Refine
+        </h3>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Full human-in-the-loop review, real-time AI reframing with feedback, draft versioning, and 1-click LinkedIn Unicode bold copying.
+        </p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="relative z-10 border-t border-glass-stroke py-6 text-center text-xs text-on-surface-variant font-code-sm">
+    <p>Distill • Autonomous AI Research Translation Engine • Powered by SQLite, ChromaDB & LangGraph</p>
+  </footer>
+
+  <script>
+    // Check if agent already exists in localStorage
+    (function() {
+      const agentId = localStorage.getItem("ada_backend_agent_id");
+      const persona = localStorage.getItem("ada_persona");
+      if (agentId && persona) {
+        const btn = document.getElementById("existing-dashboard-btn");
+        if (btn) btn.classList.remove("hidden");
+      }
+    })();
+  </script>
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

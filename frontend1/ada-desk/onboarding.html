@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Distill — Configure Your Agent Persona</title>
+  <script>
+    (function() {
+      var savedTheme = localStorage.getItem("ada-theme");
+      if (savedTheme === "light") {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      } else {
+        document.documentElement.classList.remove("light");
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="assets/js/tailwind-config.js"></script>
+  <link rel="stylesheet" href="assets/css/styles.css"/>
+  <style>
+    .glow-bg {
+      background: radial-gradient(circle at 50% 20%, rgba(78, 222, 163, 0.12), transparent 75%);
+    }
+  </style>
+</head>
+<body class="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen bg-surface-container-lowest text-on-surface flex flex-col justify-between selection:bg-primary/30 selection:text-primary">
+
+  <!-- Glow Background -->
+  <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden glow-bg">
+    <div class="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-primary/10 blur-[130px] rounded-full"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="relative z-50 border-b border-glass-stroke bg-surface/70 backdrop-blur-2xl">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="welcome.html" class="flex items-center gap-2.5 text-on-surface hover:text-primary transition-colors group">
+        <span class="material-symbols-outlined text-base text-on-surface-variant group-hover:-translate-x-1 transition-transform">arrow_back</span>
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-primary/15 border border-primary/40 flex items-center justify-center text-primary">
+            <span class="material-symbols-outlined text-base">auto_awesome</span>
+          </div>
+          <span class="font-headline-lg text-lg font-bold">Distill</span>
+        </div>
+      </a>
+
+      <div class="flex items-center gap-3 font-code-sm text-xs text-on-surface-variant">
+        <span class="px-2.5 py-1 rounded bg-surface border border-glass-stroke text-primary">Step 2 of 2: Setup Persona</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Onboarding Form Container -->
+  <main class="relative z-10 flex-1 flex items-center justify-center px-6 py-12">
+    <div class="w-full max-w-xl glass-panel rounded-2xl p-8 sm:p-10 border border-glass-stroke shadow-2xl space-y-6 relative overflow-hidden">
+      
+      <!-- Ambient light bubble -->
+      <div class="absolute -top-16 -right-16 w-44 h-44 bg-primary/15 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Title & Intro -->
+      <div class="space-y-1.5 border-b border-glass-stroke pb-5">
+        <div class="flex items-center gap-2 text-primary font-code-sm text-xs font-bold uppercase tracking-widest">
+          <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+          <span>Agent Configuration</span>
+        </div>
+        <h1 class="font-headline-lg text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight">Define Your Publishing Identity</h1>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Distill tailors its autonomous research scanning, editorial judgments, and post voice specifically to the persona details provided below.
+        </p>
+      </div>
+
+      <!-- Form Inputs -->
+      <form id="onboarding-form" class="space-y-5" onsubmit="event.preventDefault(); submitPersona();">
+        
+        <!-- 1. Agent Name -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-label-caps tracking-wider text-on-surface uppercase font-bold flex items-center justify-between">
+            <span>Agent / Persona Name</span>
+            <span class="text-on-surface-variant/60 font-normal lowercase font-code-sm text-[11px]">Author Byline</span>
+          </label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">badge</span>
+            <input id="agent-name" type="text" value="Distill" required autocomplete="off" placeholder="e.g. Distill, NeuroPulse, Dr. Alex Rivera"
+              class="w-full rounded-xl bg-surface border border-glass-stroke pl-10 pr-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-on-surface-variant/40" />
+          </div>
+          <p class="text-[11px] text-on-surface-variant">This name appears as the author on your generated posts and dashboard telemetry.</p>
+        </div>
+
+        <!-- 2. AI Domain -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-label-caps tracking-wider text-on-surface uppercase font-bold flex items-center justify-between">
+            <span>Domain Focus</span>
+            <span class="text-primary text-[10px] font-code-sm uppercase font-bold bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">AI Fields Only</span>
+          </label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">domain</span>
+            <select id="agent-domain" required
+              class="w-full rounded-xl bg-surface border border-glass-stroke pl-10 pr-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer">
+              <option value="AI Research & Machine Learning">AI Research & Machine Learning (Default)</option>
+              <option value="AI Agents & Autonomous Systems">AI Agents & Autonomous Systems</option>
+              <option value="LLM Reasoning, Alignment & Fine-tuning">LLM Reasoning, Alignment & Fine-tuning</option>
+              <option value="Computer Vision & Multimodal AI">Computer Vision & Multimodal AI</option>
+              <option value="Robotics & Embodied AI">Robotics & Embodied AI</option>
+              <option value="Generative Models & Diffusion">Generative Models & Diffusion</option>
+              <option value="AI Security & Red Teaming">AI Security & Red Teaming</option>
+              <option value="AI Infrastructure & Efficient Inference">AI Infrastructure & Efficient Inference</option>
+              <option value="Custom AI Subfield...">Custom AI Subfield...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dynamic Custom Domain Input -->
+        <div id="custom-domain-box" class="hidden space-y-1.5 animate-fade-in">
+          <label class="block text-xs font-label-caps tracking-wider text-primary uppercase font-bold flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">edit</span>
+            <span>Specify Custom AI Subfield</span>
+          </label>
+          <input id="custom-domain-input" type="text" autocomplete="off" placeholder="e.g. AI in Drug Discovery, Audio Synthesis, Neuromorphic AI..."
+            class="w-full rounded-xl bg-surface border border-primary/40 px-4 py-2.5 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-on-surface-variant/40" />
+          <p class="text-[11px] text-on-surface-variant">Distill dynamically tailors arXiv categories and search terms to your custom field.</p>
+        </div>
+
+        <!-- 3. Optional Voice Samples -->
+        <details class="rounded-xl border border-glass-stroke bg-surface/50 p-4 group transition-all">
+          <summary class="cursor-pointer text-xs font-bold text-on-surface flex items-center justify-between select-none">
+            <span class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-base text-secondary">record_voice_over</span>
+              <span>Tone & Writing Samples <span class="text-on-surface-variant font-normal">(optional)</span></span>
+            </span>
+            <span class="material-symbols-outlined text-sm text-on-surface-variant group-open:rotate-180 transition-transform">expand_more</span>
+          </summary>
+          <div class="pt-3 space-y-2">
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">
+              Paste 1 to 3 writing samples or posts in your preferred voice. The model extracts your cadence and sentence rhythm. Separate posts with a blank line.
+            </p>
+            <textarea id="agent-voice" rows="4"
+              class="w-full rounded-lg border border-glass-stroke bg-surface p-3 text-xs text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/30 leading-relaxed font-sans"
+              placeholder="Paste a sample post or paragraph...&#10;&#10;Paste another post..."></textarea>
+          </div>
+        </details>
+
+        <!-- Submit Button -->
+        <div class="pt-2">
+          <button id="submit-btn" type="submit"
+            class="w-full rounded-xl bg-primary hover:bg-primary-fixed text-on-primary py-3.5 font-label-caps uppercase text-xs tracking-wider font-bold transition-all shadow-md hover:shadow-primary/20 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50">
+            <span class="material-symbols-outlined text-base">rocket_launch</span>
+            <span>Launch Autonomous Desk</span>
+          </button>
+        </div>
+
+        <!-- Error Container -->
+        <p id="error-msg" class="text-xs text-error hidden text-center bg-error/10 border border-error/20 p-2.5 rounded-lg font-code-sm"></p>
+      </form>
+
+      <!-- Trust Footer -->
+      <div class="pt-2 border-t border-glass-stroke/50 flex items-center justify-between text-[11px] text-on-surface-variant font-code-sm">
+        <span class="flex items-center gap-1">
+          <span class="material-symbols-outlined text-xs text-primary">verified_user</span>
+          Idempotent Setup
+        </span>
+        <span>Runs locally on FastAPI & SQLite</span>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="relative z-10 border-t border-glass-stroke py-4 text-center text-xs text-on-surface-variant font-code-sm">
+    <p>Distill • Autonomous AI Editorial Platform</p>
+  </footer>
+
+  <script>
+    const domainSelect = document.getElementById("agent-domain");
+    const customBox = document.getElementById("custom-domain-box");
+    const customInput = document.getElementById("custom-domain-input");
+    const nameInput = document.getElementById("agent-name");
+    const voiceInput = document.getElementById("agent-voice");
+    const submitBtn = document.getElementById("submit-btn");
+    const errorMsg = document.getElementById("error-msg");
+
+    // Load existing persona if already set
+    (function() {
+      try {
+        const p = JSON.parse(localStorage.getItem("ada_persona"));
+        if (p && p.name) nameInput.value = p.name;
+        if (p && p.domain) {
+          const exists = Array.from(domainSelect.options).some(opt => opt.value === p.domain);
+          if (exists) {
+            domainSelect.value = p.domain;
+          } else {
+            domainSelect.value = "Custom AI Subfield...";
+            customBox.classList.remove("hidden");
+            customInput.value = p.domain;
+          }
+        }
+      } catch (_) {}
+    })();
+
+    domainSelect.addEventListener("change", () => {
+      if (domainSelect.value === "Custom AI Subfield...") {
+        customBox.classList.remove("hidden");
+        customInput.focus();
+      } else {
+        customBox.classList.add("hidden");
+      }
+    });
+
+    async function submitPersona() {
+      const name = nameInput.value.trim();
+      let domain = domainSelect.value;
+
+      if (domain === "Custom AI Subfield...") {
+        domain = customInput.value.trim();
+        if (!domain) {
+          showError("Please specify your custom AI subfield or topic.");
+          return;
+        }
+      }
+
+      if (!name) {
+        showError("Please provide an agent / persona name.");
+        return;
+      }
+
+      const voiceSamples = (voiceInput.value || "")
+        .split(/\n\s*\n/)
+        .map(s => s.trim())
+        .filter(s => s.split(/\s+/).length >= 10)
+        .slice(0, 5);
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="material-symbols-outlined text-base animate-spin">sync</span> Initializing Agent & Research Feeds…`;
+      errorMsg.classList.add("hidden");
+
+      const apiBase = (window.adaEngine && window.adaEngine.getSettings ? window.adaEngine.getSettings().apiUrl : "http://127.0.0.1:8000/api").replace(/\/$/, "");
+
+      try {
+        const payload = { persona: { name, domain } };
+        if (voiceSamples.length) payload.persona.voiceSamples = voiceSamples;
+
+        const res = await fetch(`${apiBase}/agent/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`Initialization failed (${res.status}): ${await res.text()}`);
+        }
+
+        const data = await res.json();
+        localStorage.setItem("ada_backend_agent_id", data.agentId);
+        localStorage.setItem("ada_persona", JSON.stringify({ name, domain }));
+
+        // Seamlessly move to main dashboard
+        window.location.href = "index.html";
+      } catch (err) {
+        showError(`${err.message}. Is the backend running on ${apiBase}?`);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined text-base">rocket_launch</span> Launch Autonomous Desk`;
+      }
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.remove("hidden");
+    }
+  </script>
+  <script src="assets/js/agent-engine.js"></script>
+</body>
+</html>

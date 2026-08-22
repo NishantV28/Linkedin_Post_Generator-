@@ -257,8 +257,7 @@
     document.querySelectorAll("[data-change-persona]").forEach((el) => {
       el.addEventListener("click", (e) => {
         e.preventDefault();
-        AdaPersona.clear();
-        window.location.reload();
+        window.location.href = "onboarding.html";
       });
     });
   }
@@ -267,9 +266,15 @@
   window.showPersonaGate = showGate;
 
   document.addEventListener("DOMContentLoaded", () => {
+    const isLandingOrOnboarding =
+      window.location.pathname.endsWith("welcome.html") ||
+      window.location.pathname.endsWith("onboarding.html");
+
     if (!AdaPersona.getAgentId()) {
-      showGate();
-      return;
+      if (!isLandingOrOnboarding) {
+        window.location.href = "welcome.html";
+        return;
+      }
     }
     paintPersona();
     wireChangePersona();
