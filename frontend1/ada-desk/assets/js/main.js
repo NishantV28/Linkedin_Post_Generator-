@@ -384,7 +384,7 @@ window.openReportModal = function(id) {
             <span class="text-on-surface-variant">•</span>
             <span class="font-label-caps text-xs text-on-surface-variant">${r.category}</span>
           </div>
-          <h2 id="modal-post-title-${r.id}" class="text-xl font-bold text-on-surface">${escapeHtml(r.title)}</h2>
+          <h2 id="modal-post-title-${r.id}" class="text-xl font-bold text-on-surface">${escapeHtml(cleanPostTitle(r.title))}</h2>
         </div>
         <div class="flex items-center gap-2 bg-primary/10 border border-primary/30 px-3 py-1.5 rounded text-primary font-code-sm text-sm">
           <span class="material-symbols-outlined text-sm">verified</span>
@@ -400,8 +400,8 @@ window.openReportModal = function(id) {
           </span>
           <span id="post-status-badge-${r.id}">${statusBadge(r.status)}</span>
         </div>
-        <div id="post-content-${r.id}" class="bg-surface-container-lowest p-5 rounded-xl border border-glass-stroke prose prose-invert max-w-none text-body-md whitespace-pre-wrap font-sans text-on-surface leading-relaxed select-text">
-          ${escapeHtml(r.content)}
+        <div id="post-content-${r.id}" data-raw-text="${escapeHtml(r.content)}" class="bg-surface-container-lowest p-6 rounded-xl border border-glass-stroke max-w-none text-body-md font-sans text-on-surface leading-relaxed select-text space-y-3 shadow-inner">
+          ${renderMarkdownPost(r.content)}
         </div>
       </div>
 
@@ -486,9 +486,22 @@ window.openReportModal = function(id) {
   `;
 
   const footer = `
-    <button onclick="copyCurrentPostText('${r.id}')" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-colors flex items-center gap-1.5">
-      <span class="material-symbols-outlined text-sm">content_copy</span> Copy Post Text
-    </button>
+    <div class="flex flex-wrap items-center justify-between w-full gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="copyPostAsLinkedIn('${r.id}')" class="px-4 py-2 bg-primary text-on-primary font-label-caps text-xs uppercase rounded hover:bg-primary-fixed transition-all shadow-sm flex items-center gap-1.5 font-bold" title="Copy with real Unicode bold characters for pasting into LinkedIn">
+          <span class="material-symbols-outlined text-sm">content_copy</span> Copy for LinkedIn (Bold)
+        </button>
+        <button onclick="copyPostAsPlain('${r.id}')" class="px-3 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke text-on-surface font-label-caps text-xs uppercase rounded transition-colors flex items-center gap-1.5" title="Copy clean text without markdown characters">
+          <span class="material-symbols-outlined text-sm">text_fields</span> Plain Text
+        </button>
+        <button onclick="copyPostAsMarkdown('${r.id}')" class="px-3 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke text-on-surface font-label-caps text-xs uppercase rounded transition-colors flex items-center gap-1.5" title="Copy raw markdown text">
+          <span class="material-symbols-outlined text-sm">code</span> Markdown
+        </button>
+      </div>
+      <button onclick="closeModalOverlay('report-modal')" class="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-glass-stroke text-on-surface font-label-caps text-xs uppercase rounded transition-colors">
+        Close
+      </button>
+    </div>
   `;
 
   createModalOverlay("report-modal", `LinkedIn Post Details — ${r.id}`, body, footer);
@@ -497,14 +510,39 @@ window.openReportModal = function(id) {
   if (typeof refreshDraftCount === "function") refreshDraftCount(r.id);
 };
 
-window.copyCurrentPostText = function(id) {
+window.copyPostAsLinkedIn = function(id) {
   const el = document.getElementById(`post-content-${id}`);
-  const text = el ? (el.innerText || el.textContent) : "";
+  const raw = el ? el.getAttribute("data-raw-text") : "";
+  const text = raw || (el ? (el.innerText || el.textContent) : "");
   if (text) {
-    navigator.clipboard.writeText(text);
-    showToast("✓ Post copied to clipboard");
+    const formatted = toLinkedInUnicode(text);
+    navigator.clipboard.writeText(formatted);
+    showToast("✓ Copied with LinkedIn bold formatting! Ready to paste on LinkedIn.");
   }
 };
+
+window.copyPostAsPlain = function(id) {
+  const el = document.getElementById(`post-content-${id}`);
+  const raw = el ? el.getAttribute("data-raw-text") : "";
+  const text = raw || (el ? (el.innerText || el.textContent) : "");
+  if (text) {
+    const plain = toCleanPlainText(text);
+    navigator.clipboard.writeText(plain);
+    showToast("✓ Copied as clean plain text");
+  }
+};
+
+window.copyPostAsMarkdown = function(id) {
+  const el = document.getElementById(`post-content-${id}`);
+  const raw = el ? el.getAttribute("data-raw-text") : "";
+  const text = raw || (el ? (el.innerText || el.textContent) : "");
+  if (text) {
+    navigator.clipboard.writeText(text);
+    showToast("✓ Raw markdown copied to clipboard");
+  }
+};
+
+window.copyCurrentPostText = window.copyPostAsLinkedIn;
 
 // Where a post sits in the review flow, as a coloured pill. Kept in one place so the
 // modal, the published list and the post-review update all agree on the wording.
@@ -551,13 +589,16 @@ window.submitReframe = async function(id) {
 
   try {
     const result = await window.AdaAgentAPI.reframePost(id, feedback);
-    if (contentEl) contentEl.textContent = result.text;
+    if (contentEl) {
+      contentEl.setAttribute("data-raw-text", result.text);
+      contentEl.innerHTML = renderMarkdownPost(result.text);
+    }
     if (rationaleEl) {
       rationaleEl.innerHTML = `<strong class="text-primary block mb-1">Editorial Rationale:</strong>${escapeHtml(result.rationale || '')}`;
     }
     
     // Update title if changed
-    const newTitle = result.text.split(/\n|\. /)[0].slice(0, 100) || "LinkedIn Post";
+    const newTitle = cleanPostTitle(result.text);
     if (titleEl) titleEl.textContent = newTitle;
 
     textarea.value = "";
@@ -672,7 +713,7 @@ window.loadDrafts = async function(id) {
         </div>
         <div class="text-[11px] text-on-surface-variant font-code-sm">${escapeHtml(sourceLabel[rev.source] || rev.source)} · ${escapeHtml(when)}</div>
         ${feedbackBlock}
-        <div class="bg-surface p-3 rounded-md border border-glass-stroke text-xs whitespace-pre-wrap font-sans text-on-surface leading-relaxed max-h-48 overflow-y-auto select-text">${escapeHtml(rev.text)}</div>
+        <div class="bg-surface p-3.5 rounded-md border border-glass-stroke text-xs font-sans text-on-surface leading-relaxed max-h-48 overflow-y-auto select-text space-y-2">${renderMarkdownPost(rev.text)}</div>
       </div>
     `;
   }).join("");
@@ -730,7 +771,10 @@ window.restoreDraft = async function(id, version) {
     const result = await window.AdaAgentAPI.restoreRevision(id, version);
 
     const contentEl = document.getElementById(`post-content-${id}`);
-    if (contentEl) contentEl.textContent = result.text;
+    if (contentEl) {
+      contentEl.setAttribute("data-raw-text", result.text);
+      contentEl.innerHTML = renderMarkdownPost(result.text);
+    }
 
     const rationaleEl = document.getElementById(`rationale-text-${id}`);
     if (rationaleEl) {
@@ -916,7 +960,7 @@ window.saveSettingsFromModal = function() {
 function openSupportModal() {
   const body = `
     <div class="space-y-4 text-sm text-on-surface-variant">
-      <p><strong>Ada Desk Documentation & Shortcuts:</strong></p>
+      <p><strong>Distill Documentation & Shortcuts:</strong></p>
       <ul class="list-disc pl-5 space-y-2 font-code-sm text-xs">
         <li><code class="text-primary">Ctrl + K</code> — Open global intelligence search</li>
         <li><code class="text-primary">Ctrl + I</code> — Initiate new vector analysis cycle</li>
@@ -925,7 +969,7 @@ function openSupportModal() {
       <p>For API integration details, visit the <a href="api.html" class="text-primary hover:underline">API Reference page</a>.</p>
     </div>
   `;
-  createModalOverlay("support-modal", "Ada Desk Support & Shortcuts", body);
+  createModalOverlay("support-modal", "Distill Support & Shortcuts", body);
 }
 
 function openMemoryModal() {
@@ -987,7 +1031,7 @@ function openSensorModal() {
 
 function openDiagnosticsModal() {
   const metrics = window.adaEngine ? window.adaEngine.getMetrics() : {};
-  const persona = window.AdaPersona?.getPersona() || { name: "Ada Engine", domain: "Autonomous Agent" };
+  const persona = window.AdaPersona?.getPersona() || { name: "Distill", domain: "AI Research & Machine Learning" };
   const body = `
     <div class="space-y-4 font-code-sm text-xs text-on-surface">
       <div class="flex items-center gap-3">
@@ -1231,7 +1275,7 @@ function renderPublishedList() {
           <span class="font-label-caps text-[10px] leading-none text-on-surface-variant">${r.category}</span>
           ${statusBadge(r.status)}
         </div>
-        <h3 onclick="openReportModal('${r.id}')" class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors cursor-pointer">${escapeHtml(r.title)}</h3>
+        <h3 onclick="openReportModal('${r.id}')" class="font-body-md text-body-md text-on-surface truncate group-hover:text-primary transition-colors cursor-pointer">${escapeHtml(cleanPostTitle(r.title))}</h3>
       </div>
       <div class="flex items-center font-code-sm text-code-sm text-on-surface-variant">${new Date(r.timestamp).toLocaleString()}</div>
       <div class="flex items-center">
@@ -1427,10 +1471,205 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function formatMarkdown(text) {
+function cleanPostTitle(txt) {
+  if (!txt) return "LinkedIn Post";
+  const firstLine = txt.trim().split(/\n|\. /)[0];
+  return firstLine.replace(/^[#\s\-*•>]+/, '').replace(/\*\*|\*|__|_|`/g, '').slice(0, 100).trim() || "LinkedIn Post";
+}
+
+// Full-featured rich markdown renderer for LinkedIn posts, summaries, and revisions
+function renderMarkdownPost(text) {
   if (!text) return '';
-  return escapeHtml(text)
-    .replace(/^## (.*$)/gim, '<h3 class="text-base font-bold text-primary mt-4 mb-2">$1</h3>')
-    .replace(/^### (.*$)/gim, '<h4 class="text-sm font-bold text-on-surface mt-3 mb-1">$1</h4>')
-    .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc text-on-surface-variant">$1</li>');
+  
+  const rawLines = text.replace(/\r\n/g, '\n').split('\n');
+  const renderedBlocks = [];
+  let inList = null; // 'ul' or 'ol'
+  let listItems = [];
+
+  const flushList = () => {
+    if (inList === 'ul') {
+      renderedBlocks.push(`<ul class="space-y-2 my-2.5 pl-1">${listItems.join('')}</ul>`);
+    } else if (inList === 'ol') {
+      renderedBlocks.push(`<ol class="space-y-2 my-2.5 pl-1">${listItems.join('')}</ol>`);
+    }
+    inList = null;
+    listItems = [];
+  };
+
+  const formatInline = (str) => {
+    let s = escapeHtml(str);
+    // Inline code `code`
+    s = s.replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-surface-container font-code-sm text-xs text-primary border border-glass-stroke">$1</code>');
+    // Bold italic ***text***
+    s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong class="font-bold italic text-on-surface">$1</strong>');
+    // Bold **text** or __text__
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-on-surface text-primary-light">$1</strong>');
+    s = s.replace(/__([^_]+)__/g, '<strong class="font-bold text-on-surface text-primary-light">$1</strong>');
+    // Italic *text* or _text_
+    s = s.replace(/\*([^*]+)\*/g, '<em class="italic text-on-surface-variant">$1</em>');
+    s = s.replace(/_([^_]+)_/g, '<em class="italic text-on-surface-variant">$1</em>');
+    // Highlight hashtags #AI #Tech
+    s = s.replace(/(^|\s)(#[a-zA-Z0-9_\u00C0-\u017F]+)/g, '$1<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary font-medium text-xs mr-1 my-0.5 hover:bg-primary/20 transition-colors cursor-pointer">$2</span>');
+    return s;
+  };
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trimEnd();
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+
+    // Headings #, ##, ###, ####
+    if (trimmed.startsWith('#### ')) {
+      flushList();
+      renderedBlocks.push(`<h5 class="text-sm font-bold text-on-surface uppercase tracking-wider mt-4 mb-2 flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-primary/80 inline-block"></span>${formatInline(trimmed.slice(5))}</h5>`);
+      continue;
+    }
+    if (trimmed.startsWith('### ')) {
+      flushList();
+      renderedBlocks.push(`<h4 class="text-base md:text-lg font-bold text-on-surface mt-4 mb-2 flex items-center gap-2 text-primary"><span class="w-2 h-2 rounded-sm bg-primary inline-block"></span>${formatInline(trimmed.slice(4))}</h4>`);
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      flushList();
+      renderedBlocks.push(`<h3 class="text-lg md:text-xl font-bold text-on-surface mt-5 mb-2.5 tracking-tight border-b border-glass-stroke pb-1.5">${formatInline(trimmed.slice(3))}</h3>`);
+      continue;
+    }
+    if (trimmed.startsWith('# ')) {
+      flushList();
+      renderedBlocks.push(`<h2 class="text-xl md:text-2xl font-extrabold text-on-surface mt-5 mb-3 tracking-tight">${formatInline(trimmed.slice(2))}</h2>`);
+      continue;
+    }
+
+    // Blockquotes >
+    if (trimmed.startsWith('> ')) {
+      flushList();
+      renderedBlocks.push(`<blockquote class="border-l-4 border-primary/60 bg-primary/5 pl-4 py-2 my-2.5 rounded-r text-on-surface-variant italic text-sm">${formatInline(trimmed.slice(2))}</blockquote>`);
+      continue;
+    }
+
+    // Bullet lists - or * or •
+    const bulletMatch = trimmed.match(/^[-*•]\s+(.*)$/);
+    if (bulletMatch) {
+      if (inList !== 'ul') {
+        flushList();
+        inList = 'ul';
+      }
+      listItems.push(`<li class="flex items-start gap-2.5 text-on-surface leading-relaxed"><span class="text-primary font-bold text-sm leading-none mt-1 select-none">•</span><div class="flex-1">${formatInline(bulletMatch[1])}</div></li>`);
+      continue;
+    }
+
+    // Numbered lists 1. 2.
+    const numMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
+    if (numMatch) {
+      if (inList !== 'ol') {
+        flushList();
+        inList = 'ol';
+      }
+      listItems.push(`<li class="flex items-start gap-2.5 text-on-surface leading-relaxed"><span class="text-primary font-code-sm text-xs font-bold px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 leading-none mt-0.5 select-none">${numMatch[1]}</span><div class="flex-1">${formatInline(numMatch[2])}</div></li>`);
+      continue;
+    }
+
+    // Normal paragraph
+    flushList();
+    renderedBlocks.push(`<p class="leading-relaxed text-on-surface">${formatInline(trimmed)}</p>`);
+  }
+
+  flushList();
+  return renderedBlocks.join('');
+}
+
+// Convert markdown styled text to Unicode mathematical bold for real LinkedIn posts
+function toUnicodeBold(str) {
+  return str.split('').map(char => {
+    const code = char.charCodeAt(0);
+    if (code >= 65 && code <= 90) { // A-Z
+      return String.fromCodePoint(0x1D5D4 + (code - 65));
+    }
+    if (code >= 97 && code <= 122) { // a-z
+      return String.fromCodePoint(0x1D5EE + (code - 97));
+    }
+    if (code >= 48 && code <= 57) { // 0-9
+      return String.fromCodePoint(0x1D7EC + (code - 48));
+    }
+    return char;
+  }).join('');
+}
+
+function toUnicodeItalic(str) {
+  return str.split('').map(char => {
+    const code = char.charCodeAt(0);
+    if (code >= 65 && code <= 90) { // A-Z
+      return String.fromCodePoint(0x1D608 + (code - 65));
+    }
+    if (code >= 97 && code <= 122) { // a-z
+      return String.fromCodePoint(0x1D622 + (code - 97));
+    }
+    return char;
+  }).join('');
+}
+
+function toLinkedInUnicode(markdownText) {
+  if (!markdownText) return '';
+  const lines = markdownText.replace(/\r\n/g, '\n').split('\n');
+  const convertedLines = lines.map(line => {
+    let l = line.trim();
+    if (!l) return '';
+
+    // Headings #, ##, ### -> Convert to Bold Uppercase heading
+    const headingMatch = l.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      const headingContent = headingMatch[2].trim();
+      return `\n${toUnicodeBold(headingContent.toUpperCase())}\n`;
+    }
+
+    // Bullet points
+    if (/^[-*]\s+/.test(l)) {
+      l = '• ' + l.replace(/^[-*]\s+/, '');
+    }
+
+    // Bold text **text** or __text__
+    l = l.replace(/\*\*([^*]+)\*\*/g, (_, p1) => toUnicodeBold(p1));
+    l = l.replace(/__([^_]+)__/g, (_, p1) => toUnicodeBold(p1));
+
+    // Italic text *text* or _text_
+    l = l.replace(/\*([^*]+)\*/g, (_, p1) => toUnicodeItalic(p1));
+    l = l.replace(/_([^_]+)_/g, (_, p1) => toUnicodeItalic(p1));
+
+    // Inline code `code`
+    l = l.replace(/`([^`]+)`/g, '$1');
+
+    return l;
+  });
+
+  return convertedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function toCleanPlainText(markdownText) {
+  if (!markdownText) return '';
+  const lines = markdownText.replace(/\r\n/g, '\n').split('\n');
+  const converted = lines.map(line => {
+    let l = line.trim();
+    if (!l) return '';
+    // Heading
+    const h = l.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      return `\n${h[2].trim().toUpperCase()}\n`;
+    }
+    // Bullets
+    if (/^[-*]\s+/.test(l)) {
+      l = '• ' + l.replace(/^[-*]\s+/, '');
+    }
+    // Bold / italic / code
+    l = l.replace(/\*\*([^*]+)\*\*/g, '$1');
+    l = l.replace(/__([^_]+)__/g, '$1');
+    l = l.replace(/\*([^*]+)\*/g, '$1');
+    l = l.replace(/_([^_]+)_/g, '$1');
+    l = l.replace(/`([^`]+)`/g, '$1');
+    return l;
+  });
+  return converted.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }

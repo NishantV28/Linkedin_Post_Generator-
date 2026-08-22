@@ -29,18 +29,12 @@ def fetch_arxiv_candidates(persona: PersonaConfig, max_results: int = 15) -> Lis
     """
     candidates: List[TopicCandidate] = []
 
-    # Infer relevant categories based on persona domain / interests
-    search_queries = []
-    for interest in persona.stable_interests:
-        if interest.startswith("cs."):
-            search_queries.append(f"cat:{interest}")
-        else:
-            search_queries.append(f"all:{interest}")
+    # Infer relevant categories and keyword terms based on persona domain / interests
+    cat_queries = [f"cat:{i}" for i in persona.stable_interests if i.startswith("cs.") or i.startswith("stat.")]
+    kw_queries = [f'all:"{i}"' if " " in i else f"all:{i}" for i in persona.stable_interests if not (i.startswith("cs.") or i.startswith("stat."))]
 
-    if not search_queries:
-        search_queries = ["cat:cs.AI", "cat:cs.LG", "cat:cs.CL"]
-
-    query_str = " OR ".join(search_queries[:4])
+    search_queries = (cat_queries[:2] + kw_queries[:2]) if (cat_queries or kw_queries) else ["cat:cs.AI", "cat:cs.LG"]
+    query_str = " OR ".join(search_queries)
 
     headers = {
         "User-Agent": "AutonomousPersonaAgent/1.0"

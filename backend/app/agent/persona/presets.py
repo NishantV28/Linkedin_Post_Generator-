@@ -265,6 +265,146 @@ ADA_PRESET = PersonaConfig(
 )
 
 
+AI_DOMAIN_PROFILES = {
+    "ai_agents": {
+        "match": ["agent", "autonomous", "tool use", "multi-agent", "planning"],
+        "stable_interests": [
+            "AI agents",
+            "autonomous LLM systems",
+            "tool use and function calling",
+            "agent planning and memory",
+            "multi-agent orchestration",
+            "agent evaluation benchmarks",
+            "cs.AI",
+            "cs.MA"
+        ],
+        "search_terms": [
+            "AI agent frameworks",
+            "autonomous LLM agents",
+            "tool using agents",
+            "agentic workflows",
+            "multi-agent systems"
+        ]
+    },
+    "llm_reasoning": {
+        "match": ["llm", "reasoning", "alignment", "fine-tuning", "prompt", "nlp", "language"],
+        "stable_interests": [
+            "LLM reasoning and chain of thought",
+            "model alignment and RLHF",
+            "fine-tuning and instruction tuning",
+            "context window mechanisms",
+            "hallucination reduction",
+            "prompt optimization",
+            "cs.CL",
+            "cs.AI"
+        ],
+        "search_terms": [
+            "LLM reasoning",
+            "chain of thought",
+            "RLHF alignment",
+            "model fine-tuning",
+            "prompt optimization"
+        ]
+    },
+    "computer_vision": {
+        "match": ["vision", "multimodal", "vlm", "image", "video", "visual"],
+        "stable_interests": [
+            "vision-language models",
+            "multimodal representation learning",
+            "image and video understanding",
+            "spatial reasoning in VLMs",
+            "visual foundation models",
+            "cs.CV",
+            "cs.AI"
+        ],
+        "search_terms": [
+            "computer vision models",
+            "vision language models",
+            "multimodal AI",
+            "visual foundation models",
+            "VLM benchmarks"
+        ]
+    },
+    "robotics": {
+        "match": ["robot", "embodied", "manipulation", "vla", "control", "locomotion"],
+        "stable_interests": [
+            "vision-language-action (VLA) models",
+            "embodied AI architectures",
+            "reinforcement learning for robotics",
+            "sim-to-real transfer",
+            "contact-rich manipulation",
+            "cs.RO",
+            "cs.AI"
+        ],
+        "search_terms": [
+            "robotics VLA policy",
+            "embodied AI",
+            "robot manipulation",
+            "sim-to-real reinforcement learning",
+            "robotics foundation models"
+        ]
+    },
+    "generative_diffusion": {
+        "match": ["diffusion", "generative", "sampling", "latent", "generation"],
+        "stable_interests": [
+            "diffusion model architectures",
+            "flow matching and continuous normalizing flows",
+            "efficient sampling methods",
+            "latent diffusion mechanisms",
+            "video and 3D generative models",
+            "cs.LG",
+            "cs.CV"
+        ],
+        "search_terms": [
+            "diffusion models",
+            "generative model sampling",
+            "flow matching",
+            "latent diffusion",
+            "video generative AI"
+        ]
+    },
+    "ai_security": {
+        "match": ["security", "injection", "jailbreak", "red team", "safety", "adversarial", "robustness"],
+        "stable_interests": [
+            "prompt injection and indirect injection",
+            "jailbreaking and adversarial robustness",
+            "model alignment vulnerabilities",
+            "red teaming methodologies",
+            "runtime agent guardrails",
+            "cs.CR",
+            "cs.AI"
+        ],
+        "search_terms": [
+            "prompt injection",
+            "LLM jailbreaking",
+            "AI red teaming",
+            "model alignment vulnerabilities",
+            "agent security"
+        ]
+    },
+    "ai_infrastructure": {
+        "match": ["infra", "infrastructure", "inference", "quantization", "serving", "hardware", "speed", "vllm", "cuda"],
+        "stable_interests": [
+            "LLM inference optimization",
+            "model quantization (FP8, INT4, AWQ)",
+            "KV cache and memory management",
+            "speculative decoding",
+            "high-throughput serving architectures",
+            "cs.DC",
+            "cs.PF",
+            "cs.LG"
+        ],
+        "search_terms": [
+            "LLM inference optimization",
+            "model quantization",
+            "vLLM speculative decoding",
+            "GPU memory serving",
+            "efficient LLM architectures"
+        ]
+    }
+}
+
+
 PRESETS: Dict[str, PersonaConfig] = {
     "distill": DISTILL_PRESET,
     "ada": ADA_PRESET,
@@ -273,19 +413,54 @@ PRESETS: Dict[str, PersonaConfig] = {
 
 def get_preset_by_name_or_domain(name: str, domain: str) -> PersonaConfig:
     """
-    Resolve an init request to a full persona.
-
-    Only the public identity - name and domain - comes from the caller. Everything
-    that makes the persona recognisable is internal and is not regenerated per run.
+    Resolve an init request to a full persona configured dynamically for the user's chosen
+    Agent Name and AI Domain.
     """
-    name_lower = name.lower()
-    domain_lower = domain.lower()
+    agent_name = (name or "Distill").strip()
+    agent_domain = (domain or "AI Research & Machine Learning").strip()
+    domain_lower = agent_domain.lower()
 
-    if "ada" in name_lower or "security" in domain_lower:
-        base = ADA_PRESET.model_copy(deep=True)
+    # Identify matching AI domain profile or synthesize from domain keywords
+    matched_profile = None
+    for profile_key, profile_data in AI_DOMAIN_PROFILES.items():
+        if any(keyword in domain_lower for keyword in profile_data["match"]):
+            matched_profile = profile_data
+            break
+
+    base = DISTILL_PRESET.model_copy(deep=True)
+    base.name = agent_name
+    base.domain = agent_domain
+
+    if matched_profile:
+        base.stable_interests = list(matched_profile["stable_interests"])
+        base.discovery_sources = DiscoverySources(
+            hacker_news=True,
+            arxiv=True,
+            github=True,
+            web_search=True,
+            search_terms=list(matched_profile["search_terms"])
+        )
     else:
-        base = DISTILL_PRESET.model_copy(deep=True)
+        # Dynamic synthesis for custom AI domains
+        stopwords = {"for", "and", "the", "with", "from", "into", "that", "this", "via", "over"}
+        domain_keywords = [
+            w for w in agent_domain.replace("&", " ").replace(",", " ").split()
+            if len(w) > 2 and w.lower() not in stopwords
+        ]
+        base.stable_interests = [agent_domain] + [f"{kw} architectures" for kw in domain_keywords[:3]] + ["cs.AI", "cs.LG"]
+        base.discovery_sources = DiscoverySources(
+            hacker_news=True,
+            arxiv=True,
+            github=True,
+            web_search=True,
+            search_terms=[f"latest {agent_domain} research", f"{agent_domain} technical mechanism", f"{agent_domain} benchmarks"]
+        )
 
-    base.name = name
-    base.domain = domain
+    base.bio = (
+        f"{agent_name} is an AI research translator and technical writer specializing in {agent_domain}.\n\n"
+        f"It reads technical papers, repositories, engineering writeups, benchmarks, and model releases "
+        f"across {agent_domain}, extracting the single technical idea or mechanism actually worth understanding.\n\n"
+        f"{agent_name} is not a hype commentator. It focuses strictly on concrete mechanisms, evidence, and tradeoffs."
+    )
+
     return base

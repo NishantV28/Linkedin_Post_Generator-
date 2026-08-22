@@ -78,7 +78,7 @@ const server = http.createServer((req, res) => {
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end('<h1>404 Not Found</h1><p>The requested path does not exist on Ada Desk server.</p>');
+      res.end('<h1>404 Not Found</h1><p>The requested path does not exist on Distill server.</p>');
       return;
     }
 
@@ -90,7 +90,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\n==================================================`);
-  console.log(`  Ada Engine Dashboard running at http://localhost:${PORT}`);
+  console.log(`  Distill Dashboard running at http://localhost:${PORT}`);
   console.log(`  Static & API Backend Ready!`);
   console.log(`==================================================\n`);
 });

@@ -1,7 +1,7 @@
 // FastAPI adapter for the Ada Desk UI. The dashboard keeps its display model,
 // while this module maps real agent records into that model.
 const BACKEND_AGENT_KEY = "ada_backend_agent_id";
-const DEFAULT_PERSONA = { name: "Ada Primary", domain: "AI Research" };
+const DEFAULT_PERSONA = { name: "Distill", domain: "AI Research & Machine Learning" };
 
 const AdaAgentAPI = {
   get config() {
@@ -92,11 +92,17 @@ const AdaAgentAPI = {
       ? rejectedAgent 
       : rejectedAll;
 
+    const cleanTitle = (txt) => {
+      if (!txt) return "LinkedIn Post";
+      const firstLine = txt.trim().split(/\n|\. /)[0];
+      return firstLine.replace(/^[#\s\-*•>]+/, '').replace(/\*\*|\*|__|_|`/g, '').slice(0, 100).trim() || "LinkedIn Post";
+    };
+
     // `status` here is the review state from the backend - pending until a human
     // approves it - not a fixed "published" label as before.
     const published = (feed.posts || []).map(post => ({
       id: post.id,
-      title: post.text.split(/\n|\. /)[0].slice(0, 100) || "LinkedIn Post",
+      title: cleanTitle(post.text),
       category: "LINKEDIN POST",
       type: "analysis",
       timestamp: post.createdAt,
