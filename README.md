@@ -84,43 +84,47 @@ flowchart LR
 
 ## Run it locally
 
-**Requires:** Python 3.11 (3.13 also works, but 3.11 matches the Docker image and has the most reliable prebuilt wheels for torch/chromadb).
+**Requirements:** Python 3.10+ / 3.11 and Node.js 18+.
 
+### 1. Setup Environment & Backend
 ```powershell
-# 1. Create a virtual environment. Keep it OUTSIDE any OneDrive-synced folder —
-#    syncing thousands of package files makes installs crawl and can lock files.
-python -m venv C:\venvs\lpg
-C:\venvs\lpg\Scripts\Activate.ps1
+# 1. Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 
-# 2. Install (downloads torch and friends — several GB, takes a while)
+# 2. Install backend dependencies
 python -m pip install -r requirements.txt
 
-# 3. Configure
+# 3. Configure API keys (.env)
 Copy-Item .env.example .env
-notepad .env     # put your real GROQ_API_KEY in — see below
+notepad .env     # Add your GROQ_API_KEY (or OPENAI_API_KEY)
 ```
 
+### 2. Start the Servers
+
+#### Terminal 1 — Backend (FastAPI on Port 8000)
 ```powershell
-# 4. Run — FRONTEND_DIR makes FastAPI serve the dashboard too
-$env:FRONTEND_DIR = "frontend1\ada-desk"
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open **http://127.0.0.1:8000/** for the dashboard and **http://127.0.0.1:8000/health** to check status — `canPublish` must be `true` before the agent can publish anything.
+#### Terminal 2 — Frontend (Distill Desk on Port 5173)
+```powershell
+node frontend1/ada-desk/server.js
+```
 
-On macOS/Linux the equivalents are `python3 -m venv .venv`, `source .venv/bin/activate`, and `export FRONTEND_DIR=frontend1/ada-desk`.
+### 3. Open the App in Your Browser
 
-**Tests:**
+Open: **[http://localhost:5173/](http://localhost:5173/)**
 
+#### 🚀 User Journey:
+1. **Hero Landing Page (`welcome.html`)**: First page visitors see introducing Distill and its autonomous AI research pipeline.
+2. **Persona Onboarding (`onboarding.html`)**: Click *"Configure Your Agent Persona"* to specify your **Agent / Author Name** and **AI Domain Focus** (e.g. *AI Agents*, *LLM Alignment*, *Computer Vision*, *Robotics*, or a *Custom AI subfield*).
+3. **Main Dashboard (`index.html`)**: Autonomous research feeds start scanning matching topics, judging technical mechanisms, drafting posts, and enabling 1-click LinkedIn Unicode bold copying.
+
+### Tests:
 ```powershell
 python -m pytest backend/tests -v
 ```
-
-### Notes
-
-- `--reload` watches `.py` files only. **Changing `.env` requires a full restart.**
-- If `Activate.ps1` is blocked, run `Set-ExecutionPolicy -Scope Process -Bypass` first.
-- The dashboard talks to a relative `/api` path, so it works wherever it's served from. Running it separately on another port (via `frontend1/ada-desk/server.js`) also works — that server proxies `/api` and `/health` to port 8000.
 
 ---
 
