@@ -69,7 +69,7 @@ const server = http.createServer((req, res) => {
 
   // Handle Static File Requests
   if (pathname === '/') {
-    pathname = '/index.html';
+    pathname = '/welcome.html';
   }
 
   let filePath = path.join(PUBLIC_DIR, pathname);
